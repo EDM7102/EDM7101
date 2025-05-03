@@ -211,186 +211,205 @@
   <audio id="remoteAudio" autoplay></audio>
 
   <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
-  <script>
+<script>
   const socket = io('/', { autoConnect: false });
 
+  const connectBtn = document.getElementById('connectBtn');
+  const chat = document.getElementById('chatBody');
+  const inputArea = document.querySelector('.chat-input');
+  const msg = document.getElementById('messageInput');
+  const clear = document.getElementById('clearBtn');
+  const screenBtn = document.getElementById('screenBtn');
+  const video = document.getElementById('remoteScreen');
+  const micSelect = document.getElementById('micSelect');
+  const fullscreenBtn = document.getElementById('fullscreenBtn');
+  const remoteAudio = document.getElementById('remoteAudio');
+  const fileInput = document.getElementById('fileInput');
+  const screenNotice = document.getElementById('screenNotice');
+  const userList = document.getElementById('userList');
 
-    const connectBtn = document.getElementById('connectBtn');
-    const chat = document.getElementById('chatBody');
-    const inputArea = document.querySelector('.chat-input');
-    const msg = document.getElementById('messageInput');
-    const clear = document.getElementById('clearBtn');
-    const screenBtn = document.getElementById('screenBtn');
-    const video = document.getElementById('remoteScreen');
-    const micSelect = document.getElementById('micSelect');
-    const fullscreenBtn = document.getElementById('fullscreenBtn');
-    const remoteAudio = document.getElementById('remoteAudio');
-    const fileInput = document.getElementById('fileInput');
-    const screenNotice = document.getElementById('screenNotice');
-    const userList = document.getElementById('userList');
+  let connected = false;
+  let peer = null;
+  let localStream = null;
+  let remoteStream = new MediaStream();
 
-    let connected = false;
-    let peer = null;
-    let localStream = null;
-    let remoteStream = new MediaStream();
+  fullscreenBtn.onclick = () => {
+    if (video.requestFullscreen) video.requestFullscreen();
+  };
 
-    fullscreenBtn.onclick = () => {
-      if (video.requestFullscreen) video.requestFullscreen();
-    };
-
-    async function loadMicrophones() {
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        micSelect.innerHTML = '';
-        devices.filter(d => d.kind === 'audioinput').forEach((d, i) => {
-          const option = document.createElement('option');
-          option.value = d.deviceId;
-          option.text = d.label || `Mikrofon ${i + 1}`;
-          micSelect.appendChild(option);
-        });
-      } catch (err) {
-        console.error('Mikrofonzugriff verweigert:', err);
-      }
+  async function loadMicrophones() {
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      micSelect.innerHTML = '';
+      devices.filter(d => d.kind === 'audioinput').forEach((d, i) => {
+        const option = document.createElement('option');
+        option.value = d.deviceId;
+        option.text = d.label || `Mikrofon ${i + 1}`;
+        micSelect.appendChild(option);
+      });
+    } catch (err) {
+      console.error('Mikrofonzugriff verweigert:', err);
     }
+  }
 
-    loadMicrophones();
+  loadMicrophones();
 
-    connectBtn.onclick = async () => {
-      connected = !connected;
-      if (connected) {
-        connectBtn.style.background = 'green';
-        chat.style.display = 'flex';
-        inputArea.style.display = 'block';
-        socket.connect();
-        socket.emit('join', 'default');
-        socket.emit('get_users', 'default');
+  connectBtn.onclick = async () => {
+    connected = !connected;
+    if (connected) {
+      connectBtn.style.background = 'green';
+      chat.style.display = 'flex';
+      inputArea.style.display = 'block';
+      socket.connect();
+      socket.emit('join', 'default');
+      socket.emit('get_users', 'default');
 
-        const selectedMic = micSelect.value;
-        localStream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: selectedMic } } });
-
-        initPeer();
-        localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
-
-        const offer = await peer.createOffer();
-        await peer.setLocalDescription(offer);
-        socket.emit('offer', { offer, room: 'default' });
-      } else {
-        connectBtn.style.background = 'red';
-        chat.style.display = 'none';
-        inputArea.style.display = 'none';
-        socket.disconnect();
-        if (peer) peer.close();
-        if (localStream) localStream.getTracks().forEach(t => t.stop());
-        screenNotice.style.display = 'none';
-        document.body.classList.remove('with-notice');
-      }
-    };
-
-    screenBtn.onclick = async () => {
-      const [w, h] = document.getElementById('qualitySelect').value.split('x').map(Number);
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: 30 } }
+      const selectedMic = micSelect.value;
+      localStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          deviceId: selectedMic ? { exact: selectedMic } : undefined,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
       });
 
-      screenStream.getTracks().forEach(track => peer.addTrack(track, screenStream));
+      initPeer();
+      localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
+
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
       socket.emit('offer', { offer, room: 'default' });
+    } else {
+      connectBtn.style.background = 'red';
+      chat.style.display = 'none';
+      inputArea.style.display = 'none';
+      socket.disconnect();
+      if (peer) peer.close();
+      if (localStream) localStream.getTracks().forEach(t => t.stop());
+      screenNotice.style.display = 'none';
+      document.body.classList.remove('with-notice');
+    }
+  };
 
-      screenNotice.style.display = 'block';
-      document.body.classList.add('with-notice');
+  screenBtn.onclick = async () => {
+    const [w, h] = document.getElementById('qualitySelect').value.split('x').map(Number);
+    const screenStream = await navigator.mediaDevices.getDisplayMedia({
+      video: { width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: 30 } }
+    });
 
-      screenStream.getVideoTracks()[0].addEventListener('ended', () => {
-        screenNotice.style.display = 'none';
-        document.body.classList.remove('with-notice');
+    screenStream.getTracks().forEach(track => peer.addTrack(track, screenStream));
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    socket.emit('offer', { offer, room: 'default' });
+
+    screenNotice.style.display = 'block';
+    document.body.classList.add('with-notice');
+
+    screenStream.getVideoTracks()[0].addEventListener('ended', () => {
+      screenNotice.style.display = 'none';
+      document.body.classList.remove('with-notice');
+    });
+  };
+
+  function initPeer() {
+    peer = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' }
+      ]
+    });
+    remoteStream = new MediaStream();
+    video.srcObject = remoteStream;
+    remoteAudio.srcObject = remoteStream;
+
+    peer.ontrack = e => {
+      e.streams[0].getTracks().forEach(track => {
+        if (!remoteStream.getTracks().some(t => t.id === track.id)) {
+          remoteStream.addTrack(track);
+        }
       });
+      video.style.display = 'block';
+      fullscreenBtn.style.display = 'block';
     };
 
-    function initPeer() {
-      peer = new RTCPeerConnection();
-      remoteStream = new MediaStream();
-      video.srcObject = remoteStream;
-      remoteAudio.srcObject = remoteStream;
+    peer.onicecandidate = e => {
+      if (e.candidate) socket.emit('ice', { candidate: e.candidate, room: 'default' });
+    };
+  }
 
-      peer.ontrack = e => {
-        e.streams[0].getTracks().forEach(track => {
-          if (!remoteStream.getTracks().some(t => t.id === track.id)) {
-            remoteStream.addTrack(track);
-          }
-        });
-        video.style.display = 'block';
-        fullscreenBtn.style.display = 'block';
-      };
+  socket.on('offer', async data => {
+    const selectedMic = micSelect.value;
+    localStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        deviceId: selectedMic ? { exact: selectedMic } : undefined,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    });
 
-      peer.onicecandidate = e => {
-        if (e.candidate) socket.emit('ice', { candidate: e.candidate, room: 'default' });
-      };
+    initPeer();
+    localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
+    await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    socket.emit('answer', { answer, room: 'default' });
+  });
+
+  socket.on('answer', async data => {
+    await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
+  });
+
+  socket.on('ice', async data => {
+    if (data.candidate) {
+      try { await peer.addIceCandidate(new RTCIceCandidate(data.candidate)); }
+      catch (e) { console.error('Fehler bei ICE-Kandidat:', e); }
     }
+  });
 
-    socket.on('offer', async data => {
-      const selectedMic = micSelect.value;
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: selectedMic } } });
-      initPeer();
-      localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
-      await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      socket.emit('answer', { answer, room: 'default' });
-    });
-
-    socket.on('answer', async data => {
-      await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
-    });
-
-    socket.on('ice', async data => {
-      if (data.candidate) {
-        try { await peer.addIceCandidate(new RTCIceCandidate(data.candidate)); }
-        catch (e) { console.error('Fehler bei ICE-Kandidat:', e); }
-      }
-    });
-
-    msg.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        if (!msg.value.trim()) return;
-        socket.emit('message', { room: 'default', user: 'User', text: msg.value });
-        appendMsg('Du', msg.value, 'user');
-        msg.value = '';
-      }
-    });
-
-    socket.on('message', d => appendMsg(d.user, d.text, 'assistant'));
-
-    socket.on('users', users => {
-      userList.innerHTML = '🧑‍🤝‍🧑 Verbundene IPs:<br>' + users.map(u => `• ${u}`).join('<br>');
-    });
-
-    clear.onclick = () => chat.innerHTML = '';
-
-    fileInput.addEventListener('change', async () => {
-      const files = Array.from(fileInput.files);
-      if (!files.length) return;
-      const formData = new FormData();
-      files.forEach(file => formData.append('files', file));
-      try {
-        const res = await fetch('/upload', { method: 'POST', body: formData });
-        if (!res.ok) throw new Error(`Server-Antwort: ${res.status} ${res.statusText}`);
-        const result = await res.json();
-        result.files.forEach(f => appendMsg('Du', `📎 <a href="${f.url}" target="_blank">${f.name}</a>`, 'user'));
-      } catch (err) {
-        alert('Upload fehlgeschlagen!');
-        console.error(err);
-      } finally {
-        fileInput.value = '';
-      }
-    });
-
-    function appendMsg(name, text, type) {
-      const t = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-      chat.innerHTML += `<div class="message ${type}"><strong>${name}:</strong> ${text}<div class="timestamp">${t}</div></div>`;
-      chat.scrollTop = chat.scrollHeight;
+  msg.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (!msg.value.trim()) return;
+      socket.emit('message', { room: 'default', user: 'User', text: msg.value });
+      appendMsg('Du', msg.value, 'user');
+      msg.value = '';
     }
-  </script>
+  });
+
+  socket.on('message', d => appendMsg(d.user, d.text, 'assistant'));
+
+  socket.on('users', users => {
+    userList.innerHTML = '🧑‍🤝‍🧑 Verbundene IPs:<br>' + users.map(u => `• ${u}`).join('<br>');
+  });
+
+  clear.onclick = () => chat.innerHTML = '';
+
+  fileInput.addEventListener('change', async () => {
+    const files = Array.from(fileInput.files);
+    if (!files.length) return;
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
+    try {
+      const res = await fetch('/upload', { method: 'POST', body: formData });
+      if (!res.ok) throw new Error(`Server-Antwort: ${res.status} ${res.statusText}`);
+      const result = await res.json();
+      result.files.forEach(f => appendMsg('Du', `📎 <a href="${f.url}" target="_blank">${f.name}</a>`, 'user'));
+    } catch (err) {
+      alert('Upload fehlgeschlagen!');
+      console.error(err);
+    } finally {
+      fileInput.value = '';
+    }
+  });
+
+  function appendMsg(name, text, type) {
+    const t = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    chat.innerHTML += `<div class="message ${type}"><strong>${name}:</strong> ${text}<div class="timestamp">${t}</div></div>`;
+    chat.scrollTop = chat.scrollHeight;
+  }
+</script>
+
 </body>
 </html>
