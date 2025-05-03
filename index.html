@@ -212,7 +212,8 @@
 
   <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
   <script>
-    const socket = io('http://localhost:5000', { autoConnect: false });
+  const socket = io('/', { autoConnect: false });
+
 
     const connectBtn = document.getElementById('connectBtn');
     const chat = document.getElementById('chatBody');
