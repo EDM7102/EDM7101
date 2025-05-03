@@ -4,17 +4,21 @@ const socketIO = require('socket.io');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const cors = require('cors');
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIO(server);
 
-// ========== STATIC & UPLOADS ==========
+// ===== CORS-Fix (optional, aber sicher für externes Frontend) =====
+app.use(cors());
+
+// ===== Static Files =====
 app.use(express.static(__dirname));
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
-// Multer Setup
+// ===== File Upload via Multer =====
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => cb(null, Date.now() + '_' + file.originalname)
@@ -31,7 +35,7 @@ app.post('/upload', upload.array('files'), (req, res) => {
 
 app.use('/uploads', express.static(uploadDir));
 
-// ========== SOCKET.IO ==========
+// ===== Socket.IO: Chat + WebRTC Signaling =====
 const userIPs = new Set();
 
 io.on('connection', socket => {
@@ -42,6 +46,10 @@ io.on('connection', socket => {
     socket.join(room);
     socket.room = room;
     io.to(room).emit('users', Array.from(userIPs));
+  });
+
+  socket.on('get_users', room => {
+    io.to(socket.id).emit('users', Array.from(userIPs));
   });
 
   socket.on('message', data => {
@@ -60,18 +68,14 @@ io.on('connection', socket => {
     socket.to(data.room).emit('ice', data);
   });
 
-  socket.on('get_users', room => {
-    io.to(socket.id).emit('users', Array.from(userIPs));
-  });
-
   socket.on('disconnect', () => {
     userIPs.delete(ip);
     io.emit('users', Array.from(userIPs));
   });
 });
 
-// ========== START SERVER ==========
+// ===== Start Server =====
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`Server läuft auf Port ${PORT}`);
+  console.log(`✅ Server läuft auf Port ${PORT}`);
 });
