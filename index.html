@@ -210,6 +210,7 @@
   <button id="fullscreenBtn">🔎 Vollbild</button>
   <audio id="remoteAudio" autoplay></audio>
 
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js" integrity="sha384-mZLF4UVrpi/QTWPA7BjNPEniK6dW9IjUeQtKmbtNLeZltWwZYKhmjt4JdkZxgJkw" crossorigin="anonymous"></script>
 <script>
 const socket = io('/', { autoConnect: false });
 
@@ -234,6 +235,9 @@ let remoteStream = new MediaStream();
 
 fullscreenBtn.onclick = () => {
   if (video.requestFullscreen) video.requestFullscreen();
+  else if (video.mozRequestFullScreen) video.mozRequestFullScreen(); /* Firefox */
+  else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen(); /* Chrome, Safari & Opera */
+  else if (video.msRequestFullscreen) video.msRequestFullscreen(); /* IE/Edge */
 };
 
 async function loadMicrophones() {
@@ -258,34 +262,52 @@ connectBtn.onclick = async () => {
   connected = !connected;
   if (connected) {
     connectBtn.style.background = 'green';
+    connectBtn.textContent = '🔌 Verbunden'; // Initial text
     chat.style.display = 'flex';
     inputArea.style.display = 'block';
     socket.connect();
     socket.emit('join', 'default');
     socket.emit('get_users', 'default');
 
-    const selectedMic = micSelect.value;
-    localStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        deviceId: selectedMic ? { exact: selectedMic } : undefined,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        sampleRate: 48000,
-        channelCount: 1
-      }
-    });
+    try {
+      const selectedMic = micSelect.value;
+      localStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          deviceId: selectedMic ? { exact: selectedMic } : undefined,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 48000,
+          channelCount: 1
+        },
+        video: false // Ensure video is not requested here
+      });
 
-    showAudioLevel(localStream);
+      showAudioLevel(localStream);
 
-    initPeer();
-    localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
+      initPeer();
+      localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
 
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
-    socket.emit('offer', { offer, room: 'default' });
+      const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
+      socket.emit('offer', { offer, room: 'default' });
+    } catch (error) {
+      console.error("Error getting user media:", error);
+      alert("Failed to access microphone. Please check permissions.");
+      connected = false;
+      connectBtn.style.background = 'red';
+      connectBtn.textContent = '🔌 Verbinden';
+      chat.style.display = 'none';
+      inputArea.style.display = 'none';
+      socket.disconnect();
+      if (peer) peer.close();
+      if (localStream) localStream.getTracks().forEach(t => t.stop());
+      screenNotice.style.display = 'none';
+      document.body.classList.remove('with-notice');
+    }
   } else {
     connectBtn.style.background = 'red';
+    connectBtn.textContent = '🔌 Verbinden';
     chat.style.display = 'none';
     inputArea.style.display = 'none';
     socket.disconnect();
@@ -297,24 +319,48 @@ connectBtn.onclick = async () => {
 };
 
 screenBtn.onclick = async () => {
-  const [w, h] = document.getElementById('qualitySelect').value.split('x').map(Number);
-  const screenStream = await navigator.mediaDevices.getDisplayMedia({
-    video: { width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: 30 } }
-  });
+  try {
+    const [w, h] = document.getElementById('qualitySelect').value.split('x').map(Number);
+    const screenStream = await navigator.mediaDevices.getDisplayMedia({
+      video: { width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: 30 } },
+      audio: true // Request audio along with video
+    });
 
-  screenStream.getTracks().forEach(track => peer.addTrack(track, screenStream));
-  const offer = await peer.createOffer();
-  await peer.setLocalDescription(offer);
-  socket.emit('offer', { offer, room: 'default' });
+    // Replace existing video track, if any
+    const videoTrack = peer.getSenders().find(s => s.track && s.track.kind === 'video');
+    if (videoTrack) {
+      peer.removeTrack(videoTrack);
+    }
 
-  screenNotice.style.display = 'block';
-  document.body.classList.add('with-notice');
+    // Add the new screen sharing track
+    screenStream.getTracks().forEach(track => {
+      peer.addTrack(track, screenStream);
+    });
 
-  screenStream.getVideoTracks()[0].addEventListener('ended', () => {
-    screenNotice.style.display = 'none';
-    document.body.classList.remove('with-notice');
-  });
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    socket.emit('offer', { offer, room: 'default' });
+
+    screenNotice.style.display = 'block';
+    document.body.classList.add('with-notice');
+
+    screenStream.getVideoTracks()[0].addEventListener('ended', () => {
+      screenNotice.style.display = 'none';
+      document.body.classList.remove('with-notice');
+      // Re-add the camera track (if it exists)
+      if (localStream) {
+        const cameraTrack = localStream.getVideoTracks()[0];
+        if (cameraTrack) {
+          peer.addTrack(cameraTrack, localStream);
+        }
+      }
+    });
+  } catch (error) {
+    console.error("Error sharing screen:", error);
+    alert("Failed to share screen. Please check permissions.");
+  }
 };
+
 
 function initPeer() {
   peer = new RTCPeerConnection({
@@ -340,26 +386,32 @@ function initPeer() {
 }
 
 socket.on('offer', async data => {
-  const selectedMic = micSelect.value;
-  localStream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      deviceId: selectedMic ? { exact: selectedMic } : undefined,
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-      sampleRate: 48000,
-      channelCount: 1
-    }
-  });
+  try {
+    const selectedMic = micSelect.value;
+    localStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        deviceId: selectedMic ? { exact: selectedMic } : undefined,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        sampleRate: 48000,
+        channelCount: 1
+      },
+      video: false // Ensure video is not requested here
+    });
 
-  showAudioLevel(localStream);
+    showAudioLevel(localStream);
 
-  initPeer();
-  localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
-  await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
-  const answer = await peer.createAnswer();
-  await peer.setLocalDescription(answer);
-  socket.emit('answer', { answer, room: 'default' });
+    initPeer();
+    localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
+    await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    socket.emit('answer', { answer, room: 'default' });
+  } catch (error) {
+    console.error("Error handling offer:", error);
+    alert("Failed to handle offer. Please check permissions.");
+  }
 });
 
 socket.on('answer', async data => {
@@ -437,10 +489,5 @@ function showAudioLevel(stream) {
   }, 200);
 }
 </script>
-
-
-
-  
-
 </body>
 </html>
