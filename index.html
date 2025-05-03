@@ -210,30 +210,31 @@
   <button id="fullscreenBtn">🔎 Vollbild</button>
   <audio id="remoteAudio" autoplay></audio>
 
- const socket = io('/', { autoConnect: false });
-
-let peer = null;
-let localStream = null;
-let remoteStream = new MediaStream();
-let connected = false;
+<script>
+const socket = io('/', { autoConnect: false });
 
 const connectBtn = document.getElementById('connectBtn');
-const micSelect = document.getElementById('micSelect');
 const chat = document.getElementById('chatBody');
 const inputArea = document.querySelector('.chat-input');
 const msg = document.getElementById('messageInput');
 const clear = document.getElementById('clearBtn');
 const screenBtn = document.getElementById('screenBtn');
-const fileInput = document.getElementById('fileInput');
-const userList = document.getElementById('userList');
 const video = document.getElementById('remoteScreen');
-const remoteAudio = document.getElementById('remoteAudio');
+const micSelect = document.getElementById('micSelect');
 const fullscreenBtn = document.getElementById('fullscreenBtn');
+const remoteAudio = document.getElementById('remoteAudio');
+const fileInput = document.getElementById('fileInput');
 const screenNotice = document.getElementById('screenNotice');
+const userList = document.getElementById('userList');
 
-// 🎤 Pegelanzeige
-const audioCtx = new AudioContext();
-let meterNode = null;
+let connected = false;
+let peer = null;
+let localStream = null;
+let remoteStream = new MediaStream();
+
+fullscreenBtn.onclick = () => {
+  if (video.requestFullscreen) video.requestFullscreen();
+};
 
 async function loadMicrophones() {
   try {
@@ -247,7 +248,7 @@ async function loadMicrophones() {
       micSelect.appendChild(option);
     });
   } catch (err) {
-    console.error('⚠️ Mikrofonfehler:', err);
+    console.error('Mikrofonzugriff verweigert:', err);
   }
 }
 
@@ -284,12 +285,12 @@ connectBtn.onclick = async () => {
     await peer.setLocalDescription(offer);
     socket.emit('offer', { offer, room: 'default' });
   } else {
-    socket.disconnect();
-    if (peer) peer.close();
-    if (localStream) localStream.getTracks().forEach(t => t.stop());
     connectBtn.style.background = 'red';
     chat.style.display = 'none';
     inputArea.style.display = 'none';
+    socket.disconnect();
+    if (peer) peer.close();
+    if (localStream) localStream.getTracks().forEach(t => t.stop());
     screenNotice.style.display = 'none';
     document.body.classList.remove('with-notice');
   }
@@ -319,7 +320,6 @@ function initPeer() {
   peer = new RTCPeerConnection({
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
   });
-
   remoteStream = new MediaStream();
   video.srcObject = remoteStream;
   remoteAudio.srcObject = remoteStream;
@@ -370,8 +370,8 @@ socket.on('ice', async data => {
   if (data.candidate) {
     try {
       await peer.addIceCandidate(new RTCIceCandidate(data.candidate));
-    } catch (err) {
-      console.error('❌ ICE Fehler:', err);
+    } catch (e) {
+      console.error('Fehler bei ICE-Kandidat:', e);
     }
   }
 });
@@ -401,8 +401,9 @@ fileInput.addEventListener('change', async () => {
   files.forEach(file => formData.append('files', file));
   try {
     const res = await fetch('/upload', { method: 'POST', body: formData });
+    if (!res.ok) throw new Error(`Server-Antwort: ${res.status} ${res.statusText}`);
     const result = await res.json();
-    result.files.forEach(f => appendMsg('Du', `📎 <a href=\"${f.url}\" target=\"_blank\">${f.name}</a>`, 'user'));
+    result.files.forEach(f => appendMsg('Du', `📎 <a href="${f.url}" target="_blank">${f.name}</a>`, 'user'));
   } catch (err) {
     alert('Upload fehlgeschlagen!');
     console.error(err);
@@ -413,26 +414,29 @@ fileInput.addEventListener('change', async () => {
 
 function appendMsg(name, text, type) {
   const t = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-  chat.innerHTML += `<div class=\"message ${type}\"><strong>${name}:</strong> ${text}<div class=\"timestamp\">${t}</div></div>`;
+  chat.innerHTML += `<div class="message ${type}"><strong>${name}:</strong> ${text}<div class="timestamp">${t}</div></div>`;
   chat.scrollTop = chat.scrollHeight;
 }
 
-// 🔊 Pegelanzeige einblenden
 function showAudioLevel(stream) {
-  const micSource = audioCtx.createMediaStreamSource(stream);
-  meterNode = audioCtx.createAnalyser();
-  meterNode.fftSize = 32;
-  micSource.connect(meterNode);
+  const audioCtx = new AudioContext();
+  const analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 32;
+  const source = audioCtx.createMediaStreamSource(stream);
+  source.connect(analyser);
 
-  const dataArray = new Uint8Array(meterNode.frequencyBinCount);
+  const dataArray = new Uint8Array(analyser.frequencyBinCount);
   const interval = setInterval(() => {
-    meterNode.getByteFrequencyData(dataArray);
+    analyser.getByteFrequencyData(dataArray);
     const volume = Math.max(...dataArray);
     connectBtn.textContent = volume > 5 ? `🎙️ ${volume}` : '🔌 Verbunden';
-    if (!connected) clearInterval(interval);
+    if (!connected) {
+      clearInterval(interval);
+      connectBtn.textContent = '🔌 Verbinden';
+    }
   }, 200);
 }
-
+</script>
 
 
 
