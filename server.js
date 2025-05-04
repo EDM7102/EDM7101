@@ -28,7 +28,7 @@ const upload = multer({ storage });
 app.post('/upload', upload.array('files'), (req, res) => {
   const files = req.files.map(file => ({
     name: file.originalname,
-    url: /uploads/${file.filename}
+    url: `/uploads/${file.filename}`
   }));
   res.json({ files });
 });
@@ -77,5 +77,5 @@ io.on('connection', socket => {
 // ===== Start Server =====
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(✅ Server läuft auf Port ${PORT});
+  console.log(`✅ Server läuft auf Port ${PORT}`);
 });
