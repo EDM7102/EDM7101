@@ -8,17 +8,23 @@ const cors = require('cors');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIO(server);
+const io = socketIO(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
 
-// ===== CORS-Fix (optional, aber sicher für externes Frontend) =====
-app.use(cors());
-
-// ===== Static Files =====
-app.use(express.static(__dirname));
+// ===== Upload-Verzeichnis vorbereiten =====
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
-// ===== File Upload via Multer =====
+// ===== Middlewares =====
+app.use(cors());
+app.use(express.static(__dirname));
+app.use('/uploads', express.static(uploadDir));
+
+// ===== Multer-Konfiguration für Datei-Upload =====
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => cb(null, Date.now() + '_' + file.originalname)
@@ -33,49 +39,48 @@ app.post('/upload', upload.array('files'), (req, res) => {
   res.json({ files });
 });
 
-app.use('/uploads', express.static(uploadDir));
-
-// ===== Socket.IO: Chat + WebRTC Signaling =====
-const userIPs = new Set();
+// ===== Socket.IO: WebRTC & Chat-Management =====
+const rooms = {}; // { roomName: { socketId: username } }
 
 io.on('connection', socket => {
-  const ip = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
-  userIPs.add(ip);
+  console.log(`🔌 Verbindung: ${socket.id}`);
 
-  socket.on('join', room => {
+  socket.on('join', ({ room, username }) => {
     socket.join(room);
     socket.room = room;
-    io.to(room).emit('users', Array.from(userIPs));
+    socket.username = username;
+
+    if (!rooms[room]) rooms[room] = {};
+    rooms[room][socket.id] = username;
+
+    // Informiere neuen Client über alle vorhandenen Nutzer (außer sich selbst)
+    const users = Object.keys(rooms[room]).filter(id => id !== socket.id);
+    socket.emit('users', users.map(id => ({ id, name: rooms[room][id] })));
+
+    // Informiere andere Clients über den Neuzugang
+    socket.to(room).emit('new-user', { id: socket.id, name: username });
   });
 
-  socket.on('get_users', room => {
-    io.to(socket.id).emit('users', Array.from(userIPs));
-  });
+  // WebRTC-Signale weiterleiten (direkt an bestimmte Peers)
+  socket.on('offer', ({ to, sdp }) => io.to(to).emit('offer', { from: socket.id, sdp }));
+  socket.on('answer', ({ to, sdp }) => io.to(to).emit('answer', { from: socket.id, sdp }));
+  socket.on('ice-candidate', ({ to, candidate }) => io.to(to).emit('ice-candidate', { from: socket.id, candidate }));
 
-  socket.on('message', data => {
-    socket.to(data.room).emit('message', data);
-  });
-
-  socket.on('offer', data => {
-    socket.to(data.room).emit('offer', data);
-  });
-
-  socket.on('answer', data => {
-    socket.to(data.room).emit('answer', data);
-  });
-
-  socket.on('ice', data => {
-    socket.to(data.room).emit('ice', data);
+  socket.on('message', ({ room, user, text }) => {
+    socket.to(room).emit('message', { user, text });
   });
 
   socket.on('disconnect', () => {
-    userIPs.delete(ip);
-    io.emit('users', Array.from(userIPs));
+    const room = socket.room;
+    if (room && rooms[room]) {
+      delete rooms[room][socket.id];
+      socket.to(room).emit('user-left', socket.id);
+      if (Object.keys(rooms[room]).length === 0) delete rooms[room];
+    }
+    console.log(`❌ Getrennt: ${socket.id}`);
   });
 });
 
-// ===== Start Server =====
+// ===== Server starten =====
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`✅ Server läuft auf Port ${PORT}`);
-});
+server.listen(PORT, () => console.log(`✅ Server läuft auf Port ${PORT}`));
