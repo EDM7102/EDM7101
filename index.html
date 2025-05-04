@@ -44,6 +44,7 @@
   <div class="header">
     <span id="version"></span>
     <input id="usernameInput" placeholder="Benutzername" />
+    <button id="audioToggleBtn" disabled>🔇 Ton Aus</button>
     <button id="connectBtn" style="background: red;">🔌 Verbinden</button>
     <select id="micSelect" title="Mikrofon"></select>
     <select id="qualitySelect" title="Qualität">
@@ -53,7 +54,7 @@
       <option value="3840x2160">4K (2160p)</option>
     </select>
     <button id="screenBtn">🖥️ Teilen</button>
-    <label id="uploadBtn" title="Dateien hochladen">📁 Hochladen<input id="fileInput" type="file" multiple style="display: none;" ></label>
+    <label id="uploadBtn" title="Dateien hochladen">📁 Hochladen<input id="fileInput" type="file" multiple style="display: none;"></label>
     <button id="clearBtn">🗑️ Leeren</button>
     <div class="spacer"></div>
     <div id="userList"></div>
@@ -73,6 +74,7 @@
 
     const socket = io('/', { autoConnect: false });
     const connectBtn = document.getElementById('connectBtn');
+    const audioToggleBtn = document.getElementById('audioToggleBtn');
     const chat = document.getElementById('chatBody');
     const inputArea = document.querySelector('.chat-input');
     const msg = document.getElementById('messageInput');
@@ -89,7 +91,7 @@
     const usernameInput = document.getElementById('usernameInput');
 
     let connected = false, peer = null, localStream = null, remoteStream = new MediaStream();
-    let username = '', lastUserCount = 0;
+    let username = '', audioEnabled = true, lastUserCount = 0;
 
     if (localStorage.getItem('username')) usernameInput.value = localStorage.getItem('username');
 
@@ -103,7 +105,6 @@
         });
       } catch (e) { console.error('Mikrofonzugriff', e); }
     }
-
     loadMicrophones();
 
     function initPeer() {
@@ -120,6 +121,13 @@
       socket.emit('offer',{offer,room:'default',user:username});
     }
 
+    audioToggleBtn.onclick = () => {
+      audioEnabled = !audioEnabled;
+      if (localStream) localStream.getAudioTracks().forEach(t => t.enabled = audioEnabled);
+      remoteAudio.muted = !audioEnabled;
+      audioToggleBtn.textContent = audioEnabled ? '🔊 Ton An' : '🔇 Ton Aus';
+    };
+
     connectBtn.onclick = async () => {
       if (!usernameInput.value.trim()) return alert('Bitte Benutzernamen eingeben.');
       username = usernameInput.value.trim(); localStorage.setItem('username', username);
@@ -129,11 +137,13 @@
         socket.connect(); socket.emit('join','default'); socket.emit('get_users','default');
         localStream = await navigator.mediaDevices.getUserMedia({audio:{deviceId:{exact:micSelect.value}}});
         initPeer(); localStream.getTracks().forEach(t=>peer.addTrack(t,localStream));
+        audioToggleBtn.disabled = false;
         await negotiate();
       } else {
         connectBtn.style.background='red'; chat.style.display='none'; inputArea.style.display='none';
         socket.disconnect(); peer&&peer.close(); localStream&&localStream.getTracks().forEach(t=>t.stop());
         screenNotice.style.display='none'; document.body.classList.remove('with-notice');
+        audioToggleBtn.disabled = true;
       }
     };
 
@@ -148,6 +158,7 @@
     socket.on('offer', async data => {
       localStream = await navigator.mediaDevices.getUserMedia({audio:{deviceId:{exact:micSelect.value}}});
       initPeer(); localStream.getTracks().forEach(t=>peer.addTrack(t,localStream));
+      audioToggleBtn.disabled = false;
       await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
       const answer = await peer.createAnswer(); await peer.setLocalDescription(answer);
       socket.emit('answer',{answer,room:'default'});
@@ -160,7 +171,6 @@
       userList.innerHTML = '🧑‍🤝‍🧑 Verbundene:<br>' + users.map(u=>`• ${u}`).join('<br>');
       if (connected && peer && users.length !== lastUserCount) {
         lastUserCount = users.length;
-        // nur neu aushandeln, wenn >=2 Nutzer
         if (users.length > 1) negotiate();
       }
     });
