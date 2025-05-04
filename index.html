@@ -1,40 +1,196 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Dark Chat Overlay mit Audio, Screen & Datei-Upload</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    :root { --bg:#121214; --surface:#1c1c1e; --header:#1f1f1f; --accent:#007aff; --success:#28a745; --text:#e5e5ea; --muted:#8e8e93; --radius:8px; --shadow:0 4px 12px rgba(0,0,0,0.5); --version-text:#8e8e93; }
-    * { box-sizing: border-box; margin:0; padding:0; }
-    body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; }
-    .header { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px; background:var(--header); box-shadow:var(--shadow); }
-    .header span, .header input, .header button, .header select, .header label { height:36px; padding:0 12px; background:#242426; border:1px solid#333; border-radius:var(--radius); color:var(--text); cursor:pointer; font-size:14px; display:flex; align-items:center; gap:6px; }
-    .header input { min-width:120px; }
-    #version { color:var(--version-text); font-size:0.85rem; margin-right:8px; }
-    .spacer{flex:1;}
-    #chatBody{flex:1;overflow-y:auto;padding:16px;display:none;flex-direction:column;gap:10px;}
-    .chat-input{display:none;padding:12px;background:var(--surface);border-top:1px solid#333;}
-    .chat-input textarea{width:100%;height:60px;padding:10px;border:1px solid#333;border-radius:var(--radius);background:#242426;color:var(--text);resize:none;font-size:14px;}
-    .message{padding:10px 14px;border-radius:var(--radius);max-width:70%;word-break:break-word;box-shadow:var(--shadow);position:relative;}
-    .user{background:linear-gradient(to right,var(--accent),#0051b0);color:#fff;align-self:flex-end;border-bottom-right-radius:0;}
-    .assistant{background:linear-gradient(to right,#2c2c2c,#1a1a1a);align-self:flex-start;border-bottom-left-radius:0;}
-    .timestamp{font-size:12px;color:var(--muted);text-align:right;margin-top:4px;}
-    #remoteScreen{position:fixed;bottom:12px;right:12px;width:320px;height:180px;display:none;border:2px solid var(--accent);border-radius:var(--radius);box-shadow:var(--shadow);background:black;object-fit:contain;z-index:10;}
-    #fullscreenBtn{position:fixed;bottom:200px;right:12px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);padding:6px 12px;cursor:pointer;display:none;z-index:999;}
-    #screenNotice{display:none;position:fixed;top:0;left:0;width:100%;background:var(--success);color:white;padding:10px 16px;text-align:center;font-weight:600;font-size:15px;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,0.3);}
-    audio{display:none;} a{color:var(--accent);text-decoration:none;}
+    :root {
+      --bg:#121214;
+      --surface:#1c1c1e;
+      --header:#1f1f1f;
+      --accent:#007aff;
+      --success:#28a745;
+      --text:#e5e5ea;
+      --muted:#8e8e93;
+      --radius:8px;
+      --shadow:0 4px 12px rgba(0,0,0,0.5);
+      --version-text:#8e8e93;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    body.with-notice .header {
+      margin-top: 40px;
+    }
+
+    .header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 10px;
+      background: var(--header);
+      box-shadow: var(--shadow);
+    }
+
+    .header button,
+    .header select,
+    .header label,
+    .header input {
+      height: 36px;
+      padding: 0 12px;
+      background: #242426;
+      border: 1px solid #333;
+      border-radius: var(--radius);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .header input { min-width: 120px; }
+
+    #version {
+      color: var(--version-text);
+      font-size: 0.85rem;
+      margin-right: 8px;
+    }
+
+    .spacer { flex: 1; }
+
+    #chatBody {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      transition: all 0.3s ease;
+    }
+
+    .chat-input {
+      display: none;
+      padding: 12px;
+      background: var(--surface);
+      border-top: 1px solid #333;
+      transition: all 0.3s ease;
+    }
+
+    .chat-input textarea {
+      width: 100%; height: 60px;
+      padding: 10px;
+      border: 1px solid #333;
+      border-radius: var(--radius);
+      background: #242426;
+      color: var(--text);
+      resize: none;
+      font-size: 14px;
+    }
+
+    .message {
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      max-width: 70%;
+      word-break: break-word;
+      box-shadow: var(--shadow);
+      position: relative;
+    }
+
+    .user {
+      background: linear-gradient(to right, var(--accent), #0051b0);
+      color: #fff;
+      align-self: flex-end;
+      border-bottom-right-radius: 0;
+    }
+
+    .assistant {
+      background: linear-gradient(to right, #2c2c2c, #1a1a1a);
+      align-self: flex-start;
+      border-bottom-left-radius: 0;
+    }
+
+    .timestamp {
+      font-size: 12px;
+      color: var(--muted);
+      text-align: right;
+      margin-top: 4px;
+    }
+
+    #remoteScreen {
+      position: fixed;
+      bottom: 12px; right: 12px;
+      width: 320px; height: 180px;
+      display: none;
+      border: 2px solid var(--accent);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      background: black;
+      object-fit: contain;
+      z-index: 10;
+    }
+
+    #remoteScreen:fullscreen {
+      width: 100vw; height: 100vh;
+    }
+
+    #fullscreenBtn {
+      position: fixed;
+      bottom: 200px; right: 12px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      padding: 6px 12px;
+      cursor: pointer;
+      display: none; z-index: 999;
+    }
+
+    #screenNotice {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%;
+      background: var(--success);
+      color: white;
+      padding: 10px 16px;
+      text-align: center;
+      font-weight: 600;
+      font-size: 15px;
+      z-index: 9999;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      animation: slideDown 0.3s ease-out;
+    }
+
+    @keyframes slideDown {
+      from { transform: translateY(-100%); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+
+    audio { display: none; }
+    a { color: var(--accent); text-decoration: none; }
   </style>
 </head>
 <body>
   <div id="screenNotice">🟢 Bildschirm wird geteilt</div>
+
   <div class="header">
     <span id="version"></span>
     <input id="usernameInput" placeholder="Benutzername" />
-    <button id="audioBtn">🎤 Audio verbinden</button>
-    <button id="audioToggleBtn" disabled>🔇 Ton Aus</button>
-    <button id="connectBtn" style="background:red;">🔌 Verbinden</button>
+    <button id="connectBtn" style="background: red;">🔌 Verbinden</button>
     <select id="micSelect" title="Mikrofon"></select>
     <select id="qualitySelect" title="Qualität">
       <option value="1280x720">HD (720p)</option>
@@ -43,99 +199,146 @@
       <option value="3840x2160">4K (2160p)</option>
     </select>
     <button id="screenBtn">🖥️ Teilen</button>
-    <label id="uploadBtn">📁 Hochladen<input id="fileInput" type="file" multiple style="display:none;"></label>
+    <label id="uploadBtn" title="Dateien hochladen">
+      📁 Hochladen
+      <input id="fileInput" type="file" multiple style="display: none;">
+    </label>
     <button id="clearBtn">🗑️ Leeren</button>
     <div class="spacer"></div>
-    <div id="userList"></div>
+    <div id="userList" style="padding: 8px; font-size: 0.85rem; color: var(--muted);"></div>
   </div>
+
   <div id="chatBody"></div>
-  <div class="chat-input"><textarea id="messageInput" placeholder="Nachricht schreiben..."></textarea></div>
+  <div class="chat-input">
+    <textarea id="messageInput" placeholder="Nachricht schreiben..."></textarea>
+  </div>
+
   <video id="remoteScreen" autoplay playsinline></video>
   <button id="fullscreenBtn">🔎 Vollbild</button>
   <audio id="remoteAudio" autoplay></audio>
 
   <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
   <script>
-    const VERSION='1.0.0'; document.getElementById('version').textContent='v'+VERSION;
-    const socket=io('/',{autoConnect:false});
-    const connectBtn=document.getElementById('connectBtn');
-    const audioBtn=document.getElementById('audioBtn');
-    const audioToggleBtn=document.getElementById('audioToggleBtn');
-    const chat=document.getElementById('chatBody'); const inputArea=document.querySelector('.chat-input');
-    const msg=document.getElementById('messageInput'); const clear=document.getElementById('clearBtn');
-    const screenBtn=document.getElementById('screenBtn'); const video=document.getElementById('remoteScreen');
-    const micSelect=document.getElementById('micSelect'); const qualitySelect=document.getElementById('qualitySelect');
-    const fullscreenBtn=document.getElementById('fullscreenBtn'); const remoteAudio=document.getElementById('remoteAudio');
-    const fileInput=document.getElementById('fileInput'); const screenNotice=document.getElementById('screenNotice');
-    const userList=document.getElementById('userList'); const usernameInput=document.getElementById('usernameInput');
+    // Version
+    const VERSION = '1.0.0';
+    document.getElementById('version').textContent = 'v' + VERSION;
 
-    let connected=false, peer=null, localStream=null, remoteStream=new MediaStream();
-    let username='', audioEnabled=true, lastUserCount=0;
+    const socket = io('/', { autoConnect: false });
+    const connectBtn = document.getElementById('connectBtn');
+    const chat = document.getElementById('chatBody');
+    const inputArea = document.querySelector('.chat-input');
+    const msg = document.getElementById('messageInput');
+    const clear = document.getElementById('clearBtn');
+    const screenBtn = document.getElementById('screenBtn');
+    const video = document.getElementById('remoteScreen');
+    const micSelect = document.getElementById('micSelect');
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const remoteAudio = document.getElementById('remoteAudio');
+    const fileInput = document.getElementById('fileInput');
+    const screenNotice = document.getElementById('screenNotice');
+    const userList = document.getElementById('userList');
+    const usernameInput = document.getElementById('usernameInput');
 
-    if(localStorage.getItem('username'))usernameInput.value=localStorage.getItem('username');
+    let connected = false;
+    let peer = null;
+    let localStream = null;
+    let remoteStream = new MediaStream();
 
-    async function loadMicrophones(){try{await navigator.mediaDevices.getUserMedia({audio:true});
-      const devices=await navigator.mediaDevices.enumerateDevices(); micSelect.innerHTML='';
-      devices.filter(d=>d.kind==='audioinput').forEach((d,i)=>{const opt=document.createElement('option'); opt.value=d.deviceId; opt.text=d.label||`Mic ${i+1}`; micSelect.append(opt);});
-    }catch(e){console.error('Mikrofonzugriff',e);}} loadMicrophones();
+    // Load saved username
+    if (localStorage.getItem('username')) {
+      usernameInput.value = localStorage.getItem('username');
+    }
 
-    function initPeer(){ peer=new RTCPeerConnection(); remoteStream=new MediaStream(); video.srcObject=remoteStream; remoteAudio.srcObject=remoteStream;
-      peer.ontrack=e=>{e.streams[0].getTracks().forEach(t=>!remoteStream.getTracks().some(x=>x.id===t.id)&&remoteStream.addTrack(t)); video.style.display='block'; fullscreenBtn.style.display='block';};
+    fullscreenBtn.onclick = () => video.requestFullscreen();
+
+    async function loadMicrophones() {
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        micSelect.innerHTML = '';
+        devices.filter(d => d.kind === 'audioinput').forEach((d,i) => {
+          const opt=document.createElement('option');opt.value=d.deviceId;opt.text=d.label||`Mic ${i+1}`;micSelect.append(opt);
+        });
+      } catch(e){console.error(e);}
+    }
+    loadMicrophones();
+
+    function initPeer() {
+      peer=new RTCPeerConnection();
+      remoteStream=new MediaStream();
+      video.srcObject=remoteStream;
+      remoteAudio.srcObject=remoteStream;
+      peer.ontrack=e=>e.streams[0].getTracks().forEach(t=>{if(!remoteStream.getTracks().some(x=>x.id===t.id))remoteStream.addTrack(t)}),video.style.display='block',fullscreenBtn.style.display='block';
       peer.onicecandidate=e=>e.candidate&&socket.emit('ice',{candidate:e.candidate,room:'default'});
     }
 
-    async function negotiate(){ const offer=await peer.createOffer(); await peer.setLocalDescription(offer);
-      socket.emit('offer',{offer,room:'default',user:username}); }
-
-    audioBtn.onclick=async()=>{ if(!connected) return; localStream=await navigator.mediaDevices.getUserMedia({audio:{deviceId:{exact:micSelect.value}}});
-      localStream.getTracks().forEach(t=>peer.addTrack(t,localStream)); await negotiate(); audioToggleBtn.disabled=false; };
-
-    audioToggleBtn.onclick=()=>{ audioEnabled=!audioEnabled; if(localStream) localStream.getAudioTracks().forEach(t=>t.enabled=audioEnabled);
-      remoteAudio.muted=!audioEnabled; audioToggleBtn.textContent=audioEnabled?'🔊 Ton An':'🔇 Ton Aus'; };
-
-    connectBtn.onclick=async()=>{ if(!usernameInput.value.trim())return alert('Bitte Benutzernamen eingeben.');
-      username=usernameInput.value.trim(); localStorage.setItem('username',username);
+    connectBtn.onclick=async()=>{
+      if(!usernameInput.value.trim()){alert('Bitte Benutzernamen eingeben.');return;}const username=usernameInput.value.trim();localStorage.setItem('username',username);
       connected=!connected;
-      if(connected){ connectBtn.style.background='green'; chat.style.display='flex'; inputArea.style.display='block';
-        socket.connect(); socket.emit('join','default'); socket.emit('get_users','default');
-        initPeer(); await audioBtn.onclick(); await negotiate(); }
-      else{ connectBtn.style.background='red'; chat.style.display='none'; inputArea.style.display='none';
-        socket.disconnect(); peer&&peer.close(); localStream&&localStream.getTracks().forEach(t=>t.stop());
-        screenNotice.style.display='none'; document.body.classList.remove('with-notice'); audioToggleBtn.disabled=true; }
+      if(connected){
+        connectBtn.style.background='green';
+        chat.style.display='flex';inputArea.style.display='block';
+        socket.connect();socket.emit('join','default');socket.emit('get_users','default');
+        const mic=micSelect.value;
+        localStream=await navigator.mediaDevices.getUserMedia({audio:{deviceId:{exact:mic}}});
+        initPeer();
+        localStream.getTracks().forEach(t=>peer.addTrack(t,localStream));
+        const offer=await peer.createOffer();await peer.setLocalDescription(offer);
+        socket.emit('offer',{offer,room:'default',user:username});
+      } else {
+        connectBtn.style.background='red';chat.style.display='none';inputArea.style.display='none';
+        socket.disconnect();peer&&peer.close();localStream&&localStream.getTracks().forEach(t=>t.stop());
+        screenNotice.style.display='none';document.body.classList.remove('with-notice');
+      }
     };
 
-    screenBtn.onclick=async()=>{ const [w,h]=qualitySelect.value.split('x').map(Number);
-      const screenStream=await navigator.mediaDevices.getDisplayMedia({video:{width:{ideal:w},height:{ideal:h},frameRate:{ideal:30}}});
-      screenStream.getTracks().forEach(t=>peer.addTrack(t,screenStream)); await negotiate();
-      screenNotice.style.display='block'; document.body.classList.add('with-notice');
-      screenStream.getVideoTracks()[0].addEventListener('ended',()=>{screenNotice.style.display='none'; document.body.classList.remove('with-notice');});
+    screenBtn.onclick=async()=>{
+      const [w,h]=qualitySelect.value.split('x').map(Number);
+      const s=await navigator.mediaDevices.getDisplayMedia({video:{width:{ideal:w},height:{ideal:h},frameRate:{ideal:30}}});
+      s.getTracks().forEach(t=>peer.addTrack(t,s));
+      const o=await peer.createOffer();await peer.setLocalDescription(o);
+      socket.emit('offer',{offer:o,room:'default'});
+      screenNotice.style.display='block';document.body.classList.add('with-notice');
+      s.getVideoTracks()[0].addEventListener('ended',()=>{screenNotice.style.display='none';document.body.classList.remove('with-notice');});
     };
 
-    socket.on('offer',async data=>{ await audioBtn.onclick(); initPeer(); await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
-      const answer=await peer.createAnswer(); await peer.setLocalDescription(answer); socket.emit('answer',{answer,room:'default'});
+    socket.on('offer',async data=>{
+      const mic=micSelect.value;
+      localStream=await navigator.mediaDevices.getUserMedia({audio:{deviceId:{exact:mic}}});
+      initPeer();localStream.getTracks().forEach(t=>peer.addTrack(t,localStream));
+      await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
+      const ans=await peer.createAnswer();await peer.setLocalDescription(ans);
+      socket.emit('answer',{answer:ans,room:'default'});
     });
+
     socket.on('answer',async data=>await peer.setRemoteDescription(new RTCSessionDescription(data.answer)));
-    socket.on('ice',async data=>{ if(data.candidate)try{await peer.addIceCandidate(new RTCIceCandidate(data.candidate));}catch(e){console.error(e);} });
 
-    socket.on('users',users=>{ userList.innerHTML='🧑‍🤝‍🧑 Verbundene:<br>'+users.map(u=>`• ${u}`).join('<br>');
-      if(connected&&peer&&users.length!==lastUserCount){ lastUserCount=users.length; if(users.length>1)negotiate(); }
+    socket.on('ice',async data=>{if(data.candidate)try{await peer.addIceCandidate(new RTCIceCandidate(data.candidate));}catch(e){console.error(e);}});
+
+    msg.addEventListener('keydown',e=>{
+      if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(!msg.value.trim())return;
+        socket.emit('message',{room:'default',user:usernameInput.value,text:msg.value});
+        appendMsg(usernameInput.value,msg.value,'user');msg.value='';
+      }
     });
 
-    msg.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); if(!msg.value.trim())return;
-      socket.emit('message',{room:'default',user:username,text:msg.value}); appendMsg(username,msg.value,'user'); msg.value=''; } });
     socket.on('message',d=>appendMsg(d.user,d.text,'assistant'));
 
+    socket.on('users',users=>{userList.innerHTML='🧑‍🤝‍🧑 Verbundene:<br>'+users.map(u=>`• ${u}`).join('<br>');});
+
     clear.onclick=()=>chat.innerHTML='';
-    fileInput.addEventListener('change',async()=>{ const files=Array.from(fileInput.files); if(!files.length)return;
-      const fd=new FormData(); files.forEach(f=>fd.append('files',f));
-      try{ const res=await fetch('/upload',{method:'POST',body:fd}); if(!res.ok)throw new Error(res.statusText);
-        const r=await res.json(); r.files.forEach(f=>appendMsg(username,`📎 <a href="${f.url}" target="_blank">${f.name}</a>`,'user')); }
-      catch(e){alert('Upload fehlgeschlagen!'); console.error(e);} finally{fileInput.value='';}
+
+    fileInput.addEventListener('change',async()=>{const files=Array.from(fileInput.files);if(!files.length)return;const fd=new FormData();files.forEach(f=>fd.append('files',f));
+      try{const res=await fetch('/upload',{method:'POST',body:fd});if(!res.ok)throw new Error(res.statusText);
+        const r=await res.json();r.files.forEach(f=>appendMsg(usernameInput.value,`📎 <a href="${f.url}" target="_blank">${f.name}</a>`,'user'));
+      }catch(e){alert('Upload fehlgeschlagen!');console.error(e);}finally{fileInput.value='';}
     });
 
-    function appendMsg(name,text,type){ const t=new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+    function appendMsg(name,text,type){
+      const t=new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
       chat.innerHTML+=`<div class="message ${type}"><strong>${name}:</strong> ${text}<div class="timestamp">${t}</div></div>`;
-      chat.scrollTop=chat.scrollHeight; }
+      chat.scrollTop=chat.scrollHeight;
+    }
   </script>
 </body>
 </html>
