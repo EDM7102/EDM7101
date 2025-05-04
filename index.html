@@ -493,7 +493,7 @@
     });
 
     socket.on('users', (users) => {
-      userList.innerHTML = '🧑‍🤝‍🧑 Verbundene:<br>' + users.map(u => `• ${u}`).join('<br>');
+      userList.innerHTML = '🟢 Verbundene:<br>' + users.map(u => `• ${u}`).join('<br>');
     });
 
     clear.onclick = () => {
