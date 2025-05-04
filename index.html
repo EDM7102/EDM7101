@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Dark Chat Overlay v1.2.0 mit Multi-Peer-Unterstützung</title>
+  <title>Dark Chat Overlay v1.2.1</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
+    /* Styles wie bisher */
     :root { --bg:#121214; --surface:#1c1c1e; --header:#1f1f1f; --accent:#007aff; --success:#28a745; --text:#e5e5ea; --muted:#8e8e93; --radius:8px; --shadow:0 4px 12px rgba(0,0,0,0.5); }
     * { box-sizing:border-box; margin:0; padding:0; }
     body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; scroll-behavior:smooth; }
@@ -21,17 +22,19 @@
     .user { background:linear-gradient(to right,var(--accent),#0051b0); color:#fff; align-self:flex-end; border-bottom-right-radius:0; }
     .assistant { background:linear-gradient(to right,#2c2c2c,#1a1a1a); align-self:flex-start; border-bottom-left-radius:0; }
     .timestamp { font-size:12px; color:var(--muted); text-align:right; margin-top:4px; }
+    #remoteScreen { position:fixed; bottom:12px; right:12px; width:320px; height:180px; display:none; border:2px solid var(--accent); border-radius:var(--radius); box-shadow:var(--shadow); background:black; object-fit:contain; z-index:10; }
+    #remoteScreen:fullscreen { width:100vw; height:100vh; }
+    #fullscreenBtn { position:fixed; bottom:200px; right:12px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius); padding:6px 12px; cursor:pointer; display:none; z-index:999; }
     #screenNotice { display:none; position:fixed; top:0; left:0; width:100%; background:var(--success); color:white; padding:10px 16px; text-align:center; font-weight:600; font-size:15px; z-index:9999; box-shadow:0 2px 8px rgba(0,0,0,0.3); animation:slideDown .3s ease-out; }
     @keyframes slideDown { from { transform:translateY(-100%); opacity:0; } to { transform:translateY(0); opacity:1; } }
-    video.remote { position:fixed; bottom:12px; right:12px; width:200px; height:120px; border:2px solid var(--accent); border-radius:var(--radius); box-shadow:var(--shadow); object-fit:contain; z-index:10; margin:4px; }
-    #fullscreenBtn { position:fixed; bottom:200px; right:12px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius); padding:6px 12px; cursor:pointer; display:none; z-index:999; }
+    audio { display:none; }
     a { color:var(--accent); text-decoration:none; }
   </style>
 </head>
 <body>
   <div id="screenNotice" role="status" aria-live="polite">🟢 Bildschirm wird geteilt</div>
   <div class="header">
-    <span style="margin-right:8px;color:var(--muted);">v1.2.0</span>
+    <span style="margin-right:8px;color:var(--muted);">v1.2.1</span>
     <input id="usernameInput" type="text" placeholder="Benutzername" aria-label="Benutzername">
     <button id="connectBtn" aria-label="Verbinden">🔌 Verbinden</button>
     <select id="micSelect" aria-label="Mikrofon auswählen"><option value="">Standardgerät</option></select>
@@ -49,42 +52,179 @@
   </div>
   <div id="chatBody"></div>
   <div class="chat-input"><textarea id="messageInput" placeholder="Nachricht schreiben..." aria-label="Nachachricht schreiben"></textarea></div>
+  <video id="remoteScreen" autoplay playsinline></video>
   <button id="fullscreenBtn" aria-label="Vollbild anzeigen">🔎 Vollbild</button>
+  <audio id="remoteAudio" autoplay></audio>
 
   <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
   <script>
-    const APP_VERSION = '1.2.0';
-    document.querySelector('.header span').textContent = APP_VERSION;
-    const socket = io('/', { autoConnect:false, reconnection:true });
-    const peers = {};
-    let localStream=null, username='';
-    const usernameInput=document.getElementById('usernameInput'), connectBtn=document.getElementById('connectBtn'), micSelect=document.getElementById('micSelect'), qualitySelect=document.getElementById('qualitySelect'), screenBtn=document.getElementById('screenBtn'), chatBody=document.getElementById('chatBody'), inputArea=document.querySelector('.chat-input'), msgInput=document.getElementById('messageInput'), clearBtn=document.getElementById('clearBtn'), fileInput=document.getElementById('fileInput'), screenNotice=document.getElementById('screenNotice'), userList=document.getElementById('userList');
+    const APP_VERSION = '1.2.1';
+    // UI-Elemente
+    const usernameInput = document.getElementById('usernameInput');
+    const connectBtn    = document.getElementById('connectBtn');
+    const micSelect     = document.getElementById('micSelect');
+    const qualitySelect = document.getElementById('qualitySelect');
+    const screenBtn     = document.getElementById('screenBtn');
+    const chatBody      = document.getElementById('chatBody');
+    const inputArea     = document.querySelector('.chat-input');
+    const msgInput      = document.getElementById('messageInput');
+    const clearBtn      = document.getElementById('clearBtn');
+    const fileInput     = document.getElementById('fileInput');
+    const screenNotice  = document.getElementById('screenNotice');
+    const userList      = document.getElementById('userList');
+
     // Persistenz
-    usernameInput.value=localStorage.getItem('username')||'';
-    usernameInput.onchange=()=>localStorage.setItem('username',usernameInput.value.trim());
-    micSelect.value=localStorage.getItem('micId')||'';
-    qualitySelect.value=localStorage.getItem('quality')||'2560x1440';
-    micSelect.onchange=()=>localStorage.setItem('micId',micSelect.value);
-    qualitySelect.onchange=()=>localStorage.setItem('quality',qualitySelect.value);
-    // Load mics
-    async function loadMicrophones(){try{const s=await navigator.mediaDevices.getUserMedia({audio:true});s.getTracks().forEach(t=>t.stop());const d=await navigator.mediaDevices.enumerateDevices();micSelect.innerHTML='<option value="">Standardgerät</option>';d.filter(x=>x.kind==='audioinput').forEach((x,i)=>{const o=document.createElement('option');o.value=x.deviceId; o.text=x.label||`Mikrofon ${i+1}`;micSelect.appendChild(o)});micSelect.value=localStorage.getItem('micId')||'';}catch(e){console.warn('Mikrofone nicht verfügbar',e);}} loadMicrophones();
-    async function getAudioStream(){try{return await navigator.mediaDevices.getUserMedia({audio:micSelect.value?{deviceId:{exact:micSelect.value}}:true});}catch{return await navigator.mediaDevices.getUserMedia({audio:true});}}
-    function createPeerConnection(peerId,isInitiator){const pc=new RTCPeerConnection();pc.onicecandidate=e=>{if(e.candidate)socket.emit('ice',{to:peerId,candidate:e.candidate})};pc.ontrack=e=>{const stream=e.streams[0];let vid=document.getElementById(`video-${peerId}`);if(!vid){vid=document.createElement('video');vid.id=`video-${peerId}`;vid.className='remote';vid.autoplay=true;vid.playsInline=true;document.body.appendChild(vid);} vid.srcObject=stream;};if(localStream) localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));if(isInitiator){pc.onnegotiationneeded=async()=>{const offer=await pc.createOffer();await pc.setLocalDescription(offer);socket.emit('offer',{to:peerId,sdp:pc.localDescription});};}return pc;}
-    socket.on('users',list=>{userList.innerHTML='🧑‍🤝‍🧑 Verbundene:<br>'+list.map(u=>`• ${u}`).join('<br>');list.forEach(id=>{if(id===socket.id)return; if(!peers[id]) peers[id]=createPeerConnection(id,true);});});
-    socket.on('offer',async d=>{const{from,sdp}=d;if(!peers[from])peers[from]=createPeerConnection(from,false);const pc=peers[from];await pc.setRemoteDescription(new RTCSessionDescription(sdp));const ans=await pc.createAnswer();await pc.setLocalDescription(ans);socket.emit('answer',{to:from,sdp:pc.localDescription});});
-    socket.on('answer',async d=>{const{from,sdp}=d;const pc=peers[from];if(pc) await pc.setRemoteDescription(new RTCSessionDescription(sdp));});
-    socket.on('ice',async d=>{const{from,candidate}=d;const pc=peers[from];if(pc) await pc.addIceCandidate(new RTCIceCandidate(candidate));});
-    // Screen share
-    screenBtn.onclick=async()=>{try{const [w,h]=qualitySelect.value.split('x').map(Number);const ss=await navigator.mediaDevices.getDisplayMedia({video:{width:{ideal:w},height:{ideal:h},frameRate:{ideal:30}}});ss.getVideoTracks().forEach(t=>{for(let id in peers) peers[id].addTrack(t,ss)});screenNotice.style.display='block';document.body.classList.add('with-notice');ss.getVideoTracks()[0].addEventListener('ended',()=>{screenNotice.style.display='none';document.body.classList.remove('with-notice');});}catch(e){console.warn('Share abgebrochen',e);}};
-    // Chat handlers
-    msgInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(!msgInput.value.trim())return;const user=usernameInput.value.trim()||'User';socket.emit('message',{room:'default',user,text:msgInput.value});appendMsg(user,msgInput.value,'user');msgInput.value='';}});
-    socket.on('message',d=>appendMsg(d.user,d.text,'assistant'));
-    function appendMsg(name,text,type){const t=new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});const el=document.createElement('div');el.className=`message ${type}`;el.innerHTML=`<strong>${name}:</strong> ${text}<div class="timestamp">${t}</div>`;chatBody.appendChild(el);chatBody.scrollTop=chatBody.scrollHeight;}
-    clearBtn.onclick=()=>{chatBody.innerHTML='';};
-    // File upload
-    fileInput.addEventListener('change',async()=>{const files=Array.from(fileInput.files);if(!files.length) return;const fd=new FormData();files.forEach(f=>fd.append('files',f));try{const res=await fetch('/upload',{method:'POST',body:fd});if(!res.ok) throw new Error(res.statusText);const data=await res.json();data.files.forEach(f=>appendMsg(usernameInput.value.trim()||'User',`📎 <a href="${f.url}" target="_blank">${f.name}</a>`,'user'));}catch(e){alert('Upload fehlgeschlagen!');console.error(e);}finally{fileInput.value='';}});
-    // Connect
-    connectBtn.onclick=async()=>{if(!socket.connected){username=usernameInput.value.trim()||'User';localStream=await getAudioStream();localStream.getAudioTracks().forEach(t=>t.enabled=true);socket.auth={username};socket.connect();socket.emit('join-room','default');chatBody.style.display='flex';inputArea.style.display='block';screenBtn.disabled=false;connectBtn.textContent='🔌 Trennen';}else{Object.values(peers).forEach(pc=>pc.close());for(let k in peers) delete peers[k];if(localStream) localStream.getTracks().forEach(t=>t.stop());socket.disconnect();chatBody.style.display='none';inputArea.style.display='none';screenBtn.disabled=true;connectBtn.textContent='🔌 Verbinden';}};
+    usernameInput.value = localStorage.getItem('username') || '';
+    usernameInput.onchange = () => localStorage.setItem('username', usernameInput.value.trim());
+    micSelect.value     = localStorage.getItem('micId')      || '';
+    qualitySelect.value = localStorage.getItem('quality')    || '2560x1440';
+    micSelect.onchange     = () => localStorage.setItem('micId', micSelect.value);
+    qualitySelect.onchange = () => localStorage.setItem('quality', qualitySelect.value);
+
+    const socket = io('/', { autoConnect: false, reconnection: true });
+    let peer       = null;
+    let localStream = null;
+    let username    = '';
+    let pendingIce  = [];
+
+    // Mikrofone laden
+    async function loadMicrophones() {
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+        s.getTracks().forEach(t => t.stop());
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        micSelect.innerHTML = '<option value="">Standardgerät</option>';
+        devices.filter(d => d.kind === 'audioinput').forEach((d,i) => {
+          const o = document.createElement('option');
+          o.value = d.deviceId;
+          o.text  = d.label || `Mikrofon ${i+1}`;
+          micSelect.appendChild(o);
+        });
+        micSelect.value = localStorage.getItem('micId') || '';
+      } catch(e) {
+        console.warn('Mikrofone nicht verfügbar', e);
+      }
+    }
+    loadMicrophones();
+
+    function initPeer() {
+      if (peer) { peer.close(); peer = null; }
+      peer = new RTCPeerConnection();
+      peer.onicecandidate = e => {
+        if (e.candidate) socket.emit('ice', { candidate: e.candidate, room: 'default' });
+      };
+      peer.ontrack = e => {
+        const video = document.getElementById('remoteScreen');
+        e.streams[0].getTracks().forEach(t => {
+          if (!video.srcObject || !video.srcObject.getTracks().some(mt => mt.id === t.id)) {
+            video.srcObject = e.streams[0];
+          }
+        });
+        video.style.display = 'block';
+      };
+      pendingIce.forEach(c => peer.addIceCandidate(c).catch(console.warn));
+      pendingIce.length = 0;
+      peer.onnegotiationneeded = async () => {
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        socket.emit('offer', { offer, room: 'default', username });
+      };
+    }
+
+    async function getAudioStream() {
+      try {
+        return await navigator.mediaDevices.getUserMedia({ audio: micSelect.value?{ deviceId: { exact: micSelect.value }}:true });
+      } catch {
+        return await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+    }
+
+    socket.on('offer', async data => {
+      initPeer();
+      localStream = await getAudioStream();
+      localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
+      await peer.setRemoteDescription(data.offer);
+      const ans = await peer.createAnswer();
+      await peer.setLocalDescription(ans);
+      socket.emit('answer', { answer: ans, room: 'default', username });
+    });
+
+    socket.on('answer', async data => {
+      await peer.setRemoteDescription(data.answer);
+    });
+
+    socket.on('ice', async data => {
+      if (!peer) { pendingIce.push(data.candidate); }
+      else { await peer.addIceCandidate(data.candidate); }
+    });
+
+    socket.on('users', (users) => {
+      userList.innerHTML = users.map(u => `• ${u}`).join('<br>');
+      if (peer) peer.onnegotiationneeded();
+    });
+
+    connectBtn.onclick = async () => {
+      if (!socket.connected) {
+        username    = usernameInput.value.trim() || 'User';
+        localStream = await getAudioStream();
+        localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
+        socket.connect();
+        socket.emit('join', 'default');
+        socket.emit('get_users', 'default');
+        initPeer();
+        chatBody.style.display = 'flex';
+        inputArea.style.display = 'block';
+        screenBtn.disabled = false;
+        connectBtn.textContent = '🔌 Trennen';
+      } else {
+        socket.disconnect();
+        if (peer) { peer.close(); peer = null; }
+        if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+        chatBody.style.display = 'none';
+        inputArea.style.display = 'none';
+        screenBtn.disabled = true;
+        connectBtn.textContent = '🔌 Verbinden';
+      }
+    };
+
+    screenBtn.onclick = async () => {
+      const [w,h] = qualitySelect.value.split('x').map(Number);
+      const screen = await navigator.mediaDevices.getDisplayMedia({ video:{ width:{ideal:w}, height:{ideal:h}, frameRate:{ideal:30}}});
+      screen.getTracks().forEach(t => peer.addTrack(t, screen));
+      screenNotice.style.display = 'block'; document.body.classList.add('with-notice');
+      screen.getVideoTracks()[0].addEventListener('ended', () => {
+        screenNotice.style.display = 'none'; document.body.classList.remove('with-notice');
+      });
+    };
+
+    msgInput.addEventListener('keydown', e => {
+      if (e.key==='Enter' && !e.shiftKey) {
+        e.preventDefault();
+        socket.emit('message', { room:'default', user:username, text:msgInput.value });
+        appendMsg(username, msgInput.value, 'user'); msgInput.value='';
+      }
+    });
+
+    socket.on('message', data => appendMsg(data.user, data.text, 'assistant'));
+
+    function appendMsg(name, text, type) {
+      const div = document.createElement('div');
+      div.className = `message ${type}`;
+      div.innerHTML = `<strong>${name}:</strong> ${text}<div class=\"timestamp\">${new Date().toLocaleTimeString()}</div>`;
+      chatBody.appendChild(div);
+      chatBody.scrollTop = chatBody.scrollHeight;
+    }
+
+    clearBtn.onclick = () => chatBody.innerHTML = '';
+
+    fileInput.addEventListener('change', async () => {
+      const files = Array.from(fileInput.files);
+      const fd = new FormData(); files.forEach(f=>fd.append('files', f));
+      const res = await fetch('/upload', { method:'POST', body:fd });
+      const json = await res.json();
+      json.files.forEach(f => appendMsg(username, `📎 <a href=\"${f.url}\" target=\"_blank\">${f.name}</a>`, 'user'));
+      fileInput.value = '';
+    });
   </script>
 </body>
 </html>
