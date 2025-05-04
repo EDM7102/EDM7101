@@ -218,334 +218,330 @@
   <audio id="remoteAudio" autoplay></audio>
 
   <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
-  <script>
-    // Version
-    const VERSION = '1.0.0';
-    document.getElementById('version').textContent = 'v' + VERSION;
+<script>
+  // Version
+  const VERSION = '2.0.0';
+  document.getElementById('version').textContent = 'v' + VERSION;
 
-    const socket = io('/', { autoConnect: false });
-    const connectBtn = document.getElementById('connectBtn');
-    const chat = document.getElementById('chatBody');
-    const inputArea = document.querySelector('.chat-input');
-    const msg = document.getElementById('messageInput');
-    const clear = document.getElementById('clearBtn');
-    const screenBtn = document.getElementById('screenBtn');
-    const video = document.getElementById('remoteScreen');
-    const micSelect = document.getElementById('micSelect');
-    const fullscreenBtn = document.getElementById('fullscreenBtn');
-    const remoteAudio = document.getElementById('remoteAudio');
-    const fileInput = document.getElementById('fileInput');
-    const screenNotice = document.getElementById('screenNotice');
-    const userList = document.getElementById('userList');
-    const usernameInput = document.getElementById('usernameInput');
+  const socket = io('/', { autoConnect: false });
+  const connectBtn = document.getElementById('connectBtn');
+  const chat = document.getElementById('chatBody');
+  const inputArea = document.querySelector('.chat-input');
+  const msg = document.getElementById('messageInput');
+  const clear = document.getElementById('clearBtn');
+  const screenBtn = document.getElementById('screenBtn');
+  const video = document.getElementById('remoteScreen');
+  const micSelect = document.getElementById('micSelect');
+  const fullscreenBtn = document.getElementById('fullscreenBtn');
+  const remoteAudio = document.getElementById('remoteAudio');
+  const fileInput = document.getElementById('fileInput');
+  const screenNotice = document.getElementById('screenNotice');
+  const userList = document.getElementById('userList');
+  const usernameInput = document.getElementById('usernameInput');
 
-    let connected = false;
-    let peer = null;
-    let localStream = null;
-    let remoteStream = new MediaStream();
+  let connected = false;
+  let peerConnections = {}; // Speichert Peer-Verbindungen nach Benutzernamen
+  let localStream = null;
+  let currentRoom = 'default';
+  let currentUsername = '';
 
-    // Load saved username
-    if (localStorage.getItem('username')) {
-      usernameInput.value = localStorage.getItem('username');
-    }
+  // Lade gespeicherten Benutzernamen
+  if (localStorage.getItem('username')) {
+    usernameInput.value = localStorage.getItem('username');
+  }
 
-    fullscreenBtn.onclick = () => video.requestFullscreen();
+  // Vollbild-Funktion
+  fullscreenBtn.onclick = () => video.requestFullscreen();
 
-    async function loadMicrophones() {
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        micSelect.innerHTML = '';
-        devices.filter(d => d.kind === 'audioinput').forEach((d,i) => {
-          const opt = document.createElement('option');
-          opt.value = d.deviceId;
-          opt.text = d.label || `Mic ${i+1}`;
-          micSelect.append(opt);
-        });
-      } catch(e) {
-        console.error('Mikrofon-Zugriff fehlgeschlagen:', e);
-      }
-    }
-    loadMicrophones();
-
-    function initPeer() {
-      // Clean up existing connection if any
-      if (peer) {
-        peer.close();
-      }
-
-      peer = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' }
-        ]
+  // Mikrofone laden
+  async function loadMicrophones() {
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      micSelect.innerHTML = '';
+      devices.filter(d => d.kind === 'audioinput').forEach((d, i) => {
+        const opt = document.createElement('option');
+        opt.value = d.deviceId;
+        opt.text = d.label || `Mic ${i+1}`;
+        micSelect.append(opt);
       });
-
-      remoteStream = new MediaStream();
-      video.srcObject = remoteStream;
-      remoteAudio.srcObject = remoteStream;
-
-      // Handle incoming tracks
-      peer.ontrack = (event) => {
-        event.streams[0].getTracks().forEach((track) => {
-          if (!remoteStream.getTracks().some(t => t.id === track.id)) {
-            remoteStream.addTrack(track);
-            console.log('Track hinzugefügt:', track.kind);
-            
-            // Ensure audio tracks are properly assigned
-            if (track.kind === 'audio') {
-              remoteAudio.srcObject = remoteStream;
-            }
-          }
-        });
-      };
-
-      peer.onicecandidate = (event) => {
-        if (event.candidate) {
-          socket.emit('ice', {
-            candidate: event.candidate,
-            room: 'default'
-          });
-        }
-      };
-
-      peer.onconnectionstatechange = () => {
-        console.log('Verbindungsstatus:', peer.connectionState);
-      };
-
-      video.style.display = 'block';
-      fullscreenBtn.style.display = 'block';
+    } catch(e) {
+      console.error('Mikrofon-Zugriff fehlgeschlagen:', e);
     }
+  }
+  loadMicrophones();
 
-    connectBtn.onclick = async () => {
-      if (!usernameInput.value.trim()) {
-        alert('Bitte Benutzernamen eingeben.');
-        return;
-      }
-      
-      const username = usernameInput.value.trim();
-      localStorage.setItem('username', username);
-      connected = !connected;
+  // Initialisiere PeerConnection für einen bestimmten Benutzer
+  async function initPeerConnection(username) {
+    if (peerConnections[username]) return;
 
-      if (connected) {
-        try {
-          connectBtn.style.background = 'green';
-          chat.style.display = 'flex';
-          inputArea.style.display = 'block';
-          
-          // Verbindung herstellen
-          socket.connect();
-          socket.emit('join', 'default');
-          socket.emit('get_users', 'default');
+    const peer = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    });
 
-          // Mikrofon-Stream holen
-          const mic = micSelect.value;
-          localStream = await navigator.mediaDevices.getUserMedia({
-            audio: { deviceId: { exact: mic } }
-          });
-
-          // PeerConnection initialisieren
-          initPeer();
-          
-          // Audio-Tracks SOFORT hinzufügen
-          localStream.getAudioTracks().forEach(track => {
-            peer.addTrack(track, localStream);
-          });
-
-          // Offer erstellen und senden
-          const offer = await peer.createOffer({
-            offerToReceiveAudio: true,
-            offerToReceiveVideo: true
-          });
-          await peer.setLocalDescription(offer);
-          
-          socket.emit('offer', {
-            offer: offer,
-            room: 'default',
-            user: username
-          });
-
-        } catch (error) {
-          console.error('Verbindungsfehler:', error);
-          alert('Verbindung fehlgeschlagen: ' + error.message);
-          connected = false;
-          connectBtn.style.background = 'red';
+    // Remote-Stream verwalten
+    const remoteStream = new MediaStream();
+    peer.ontrack = (event) => {
+      event.streams[0].getTracks().forEach(track => {
+        if (!remoteStream.getTracks().some(t => t.id === track.id)) {
+          remoteStream.addTrack(track);
+          if (track.kind === 'audio') {
+            remoteAudio.srcObject = remoteStream;
+          }
+          if (track.kind === 'video') {
+            video.srcObject = remoteStream;
+            video.style.display = 'block';
+            fullscreenBtn.style.display = 'block';
+          }
         }
-      } else {
-        // Verbindung trennen
-        connectBtn.style.background = 'red';
-        chat.style.display = 'none';
-        inputArea.style.display = 'none';
-        socket.disconnect();
-        if (peer) peer.close();
-        if (localStream) localStream.getTracks().forEach(t => t.stop());
-        screenNotice.style.display = 'none';
-        document.body.classList.remove('with-notice');
+      });
+    };
+
+    peer.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit('ice', {
+          candidate: event.candidate,
+          room: currentRoom,
+          targetUser: username
+        });
       }
     };
 
-    screenBtn.onclick = async () => {
-      try {
-        const [w, h] = qualitySelect.value.split('x').map(Number);
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            width: { ideal: w },
-            height: { ideal: h },
-            frameRate: { ideal: 30 }
-          },
-          audio: false // Keine zusätzliche Audio-Übertragung vom Bildschirm
-        });
-
-        // Füge Video-Tracks zur bestehenden PeerConnection hinzu
-        screenStream.getVideoTracks().forEach(track => {
-          peer.addTrack(track, screenStream);
-        });
-
-        // Erstelle ein neues Offer mit den zusätzlichen Tracks
-        const offer = await peer.createOffer();
-        await peer.setLocalDescription(offer);
-        socket.emit('offer', {
-          offer: offer,
-          room: 'default',
-          user: usernameInput.value.trim()
-        });
-
-        screenNotice.style.display = 'block';
-        document.body.classList.add('with-notice');
-
-        // Beende die Anzeige, wenn der Bildschirm nicht mehr geteilt wird
-        screenStream.getVideoTracks()[0].onended = () => {
-          screenNotice.style.display = 'none';
-          document.body.classList.remove('with-notice');
-        };
-      } catch (error) {
-        console.error('Bildschirmfreigabe fehlgeschlagen:', error);
-      }
+    peer.onconnectionstatechange = () => {
+      console.log(`Verbindungsstatus mit ${username}:`, peer.connectionState);
     };
 
-    socket.on('offer', async (data) => {
-      if (!peer || peer.connectionState === 'closed') {
-        initPeer();
-      }
+    peerConnections[username] = { peer, remoteStream };
+    return peer;
+  }
 
+  // Verbindungsbutton
+  connectBtn.onclick = async () => {
+    if (!usernameInput.value.trim()) {
+      alert('Bitte Benutzernamen eingeben.');
+      return;
+    }
+    
+    currentUsername = usernameInput.value.trim();
+    localStorage.setItem('username', currentUsername);
+    connected = !connected;
+
+    if (connected) {
       try {
+        connectBtn.style.background = 'green';
+        chat.style.display = 'flex';
+        inputArea.style.display = 'block';
+        
+        // Verbindung herstellen
+        socket.connect();
+        socket.emit('join', currentRoom, currentUsername);
+
         // Mikrofon-Stream holen
         const mic = micSelect.value;
         localStream = await navigator.mediaDevices.getUserMedia({
           audio: { deviceId: { exact: mic } }
         });
 
-        // Füge Audio-Tracks zur PeerConnection hinzu
-        localStream.getAudioTracks().forEach(track => {
-          peer.addTrack(track, localStream);
-        });
+      } catch (error) {
+        console.error('Verbindungsfehler:', error);
+        alert('Verbindung fehlgeschlagen: ' + error.message);
+        connected = false;
+        connectBtn.style.background = 'red';
+      }
+    } else {
+      // Verbindung trennen
+      connectBtn.style.background = 'red';
+      chat.style.display = 'none';
+      inputArea.style.display = 'none';
+      
+      // Alle Verbindungen schließen
+      Object.values(peerConnections).forEach(({ peer }) => peer.close());
+      peerConnections = {};
+      
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+      }
+      
+      socket.disconnect();
+      screenNotice.style.display = 'none';
+      document.body.classList.remove('with-notice');
+    }
+  };
 
-        await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
-        const answer = await peer.createAnswer();
-        await peer.setLocalDescription(answer);
+  // Bildschirm teilen
+  screenBtn.onclick = async () => {
+    try {
+      const [w, h] = qualitySelect.value.split('x').map(Number);
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          width: { ideal: w },
+          height: { ideal: h },
+          frameRate: { ideal: 30 }
+        },
+        audio: false
+      });
+
+      // Füge Video-Track zu allen bestehenden Verbindungen hinzu
+      const videoTrack = screenStream.getVideoTracks()[0];
+      Object.values(peerConnections).forEach(({ peer }) => {
+        peer.addTrack(videoTrack, screenStream);
+      });
+
+      screenNotice.style.display = 'block';
+      document.body.classList.add('with-notice');
+
+      // Beende die Anzeige, wenn der Bildschirm nicht mehr geteilt wird
+      videoTrack.onended = () => {
+        screenNotice.style.display = 'none';
+        document.body.classList.remove('with-notice');
+      };
+    } catch (error) {
+      console.error('Bildschirmfreigabe fehlgeschlagen:', error);
+    }
+  };
+
+  // Socket.io Events
+  socket.on('users', (users) => {
+    // Filtere aktuellen Benutzer aus der Liste
+    const otherUsers = users.filter(u => u !== currentUsername);
+    userList.innerHTML = '🟢 Verbundene (' + otherUsers.length + '):<br>' + 
+      otherUsers.map(u => `• ${u}`).join('<br>');
+    
+    // Verbinde mit allen neuen Benutzern
+    otherUsers.forEach(async (user) => {
+      if (!peerConnections[user]) {
+        const peer = await initPeerConnection(user);
         
-        socket.emit('answer', {
-          answer: answer,
-          room: 'default',
-          user: usernameInput.value.trim()
-        });
-      } catch (error) {
-        console.error('Fehler bei Angebotsbeantwortung:', error);
-      }
-    });
-
-    socket.on('answer', async (data) => {
-      try {
-        await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
-      } catch (error) {
-        console.error('Fehler bei Antwortverarbeitung:', error);
-      }
-    });
-
-    socket.on('ice', async (data) => {
-      if (data.candidate) {
-        try {
-          await peer.addIceCandidate(new RTCIceCandidate(data.candidate));
-        } catch (error) {
-          console.error('ICE Candidate Fehler:', error);
+        // Füge lokale Tracks hinzu
+        if (localStream) {
+          localStream.getTracks().forEach(track => {
+            peer.addTrack(track, localStream);
+          });
         }
-      }
-    });
-
-    msg.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        if (!msg.value.trim()) return;
         
-        socket.emit('message', {
-          room: 'default',
-          user: usernameInput.value.trim(),
-          text: msg.value
+        // Erstelle Offer
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        
+        socket.emit('offer', {
+          offer,
+          room: currentRoom,
+          targetUser: user
         });
-        
-        appendMsg(usernameInput.value.trim(), msg.value, 'user');
-        msg.value = '';
       }
     });
+  });
 
-    socket.on('message', (data) => {
-      appendMsg(data.user, data.text, 'assistant');
+  socket.on('offer', async ({ offer, senderUser }) => {
+    if (senderUser === currentUsername) return;
+    
+    const peer = await initPeerConnection(senderUser);
+    await peer.setRemoteDescription(new RTCSessionDescription(offer));
+    
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    
+    socket.emit('answer', {
+      answer,
+      room: currentRoom,
+      targetUser: senderUser
     });
+  });
 
-    socket.on('users', (users) => {
-      userList.innerHTML = '🟢 Verbundene:<br>' + users.map(u => `• ${u}`).join('<br>');
-    });
+  socket.on('answer', async ({ answer, senderUser }) => {
+    if (peerConnections[senderUser]) {
+      await peerConnections[senderUser].peer.setRemoteDescription(
+        new RTCSessionDescription(answer)
+      );
+    }
+  });
 
-    clear.onclick = () => {
-      chat.innerHTML = '';
-    };
-
-    fileInput.addEventListener('change', async () => {
-      const files = Array.from(fileInput.files);
-      if (!files.length) return;
-      
-      const fd = new FormData();
-      files.forEach(f => fd.append('files', f));
-      
+  socket.on('ice', async ({ candidate, senderUser }) => {
+    if (peerConnections[senderUser] && candidate) {
       try {
-        const res = await fetch('/upload', {
-          method: 'POST',
-          body: fd
-        });
-        
-        if (!res.ok) throw new Error(res.statusText);
-        
-        const result = await res.json();
-        result.files.forEach(f => {
-          appendMsg(
-            usernameInput.value.trim(),
-            `📎 <a href="${f.url}" target="_blank">${f.name}</a>`,
-            'user'
-          );
-        });
-      } catch (error) {
-        alert('Upload fehlgeschlagen!');
-        console.error(error);
-      } finally {
-        fileInput.value = '';
+        await peerConnections[senderUser].peer.addIceCandidate(
+          new RTCIceCandidate(candidate)
+        );
+      } catch (e) {
+        console.error('ICE Fehler mit', senderUser, ':', e);
       }
-    });
+    }
+  });
 
-    function appendMsg(name, text, type) {
-      const time = new Date().toLocaleTimeString('de-DE', {
-        hour: '2-digit',
-        minute: '2-digit'
+  // Chat-Funktionen
+  msg.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (!msg.value.trim()) return;
+      
+      socket.emit('message', {
+        room: currentRoom,
+        user: currentUsername,
+        text: msg.value
       });
       
-      chat.innerHTML += `
-        <div class="message ${type}">
-          <strong>${name}:</strong> ${text}
-          <div class="timestamp">${time}</div>
-        </div>
-      `;
-      
-      chat.scrollTop = chat.scrollHeight;
+      appendMsg(currentUsername, msg.value, 'user');
+      msg.value = '';
     }
-  </script>
+  });
+
+  socket.on('message', (data) => {
+    appendMsg(data.user, data.text, 'assistant');
+  });
+
+  // Datei-Upload
+  fileInput.addEventListener('change', async () => {
+    const files = Array.from(fileInput.files);
+    if (!files.length) return;
+    
+    const fd = new FormData();
+    files.forEach(f => fd.append('files', f));
+    
+    try {
+      const res = await fetch('/upload', {
+        method: 'POST',
+        body: fd
+      });
+      
+      if (!res.ok) throw new Error(res.statusText);
+      
+      const result = await res.json();
+      result.files.forEach(f => {
+        appendMsg(
+          currentUsername,
+          `📎 <a href="${f.url}" target="_blank">${f.name}</a>`,
+          'user'
+        );
+      });
+    } catch (error) {
+      alert('Upload fehlgeschlagen!');
+      console.error(error);
+    } finally {
+      fileInput.value = '';
+    }
+  });
+
+  // Hilfsfunktion für Nachrichten
+  function appendMsg(name, text, type) {
+    const time = new Date().toLocaleTimeString('de-DE', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    chat.innerHTML += `
+      <div class="message ${type}">
+        <strong>${name}:</strong> ${text}
+        <div class="timestamp">${time}</div>
+      </div>
+    `;
+    
+    chat.scrollTop = chat.scrollHeight;
+  }
+</script>
+
 </body>
 </html>
