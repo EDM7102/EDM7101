@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Dark Chat Overlay mit Audio, Screen & Datei-Upload</title>
+  <title>Dark Chat Overlay v1.1.0 mit Audio, Screen & Datei-Upload</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -44,7 +44,8 @@
 
     .header button,
     .header select,
-    .header label {
+    .header label,
+    .header input {
       height: 36px;
       padding: 0 12px;
       background: #242426;
@@ -57,6 +58,10 @@
       align-items: center;
       gap: 6px;
       white-space: nowrap;
+    }
+
+    .header input[type="text"] {
+      width: 150px;
     }
 
     .spacer { flex: 1; }
@@ -181,6 +186,8 @@
   <div id="screenNotice" role="status" aria-live="polite">🟢 Bildschirm wird geteilt</div>
 
   <div class="header">
+    <span style="margin-right:8px; color:var(--muted);">v1.1.0</span>
+    <input id="usernameInput" type="text" placeholder="Benutzername" aria-label="Benutzername">
     <button id="connectBtn" aria-label="Verbinden">🔌 Verbinden</button>
     <select id="micSelect" title="Mikrofon" aria-label="Mikrofon auswählen">
       <option value="">Standardgerät</option>
@@ -212,6 +219,9 @@
 
   <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
   <script>
+    const APP_VERSION = '1.1.0';
+    document.querySelector('.header span').textContent = APP_VERSION;
+
     const socket = io('/', { autoConnect: false, reconnection: true });
     let connected = false;
     let peer = null;
@@ -219,6 +229,7 @@
     let remoteStream = null;
     const pendingIce = [];
 
+    const usernameInput = document.getElementById('usernameInput');
     const connectBtn = document.getElementById('connectBtn');
     const chat = document.getElementById('chatBody');
     const inputArea = document.querySelector('.chat-input');
@@ -233,6 +244,10 @@
     const fileInput = document.getElementById('fileInput');
     const screenNotice = document.getElementById('screenNotice');
     const userList = document.getElementById('userList');
+
+    // Username laden/speichern in localStorage
+    usernameInput.value = localStorage.getItem('username') || '';
+    usernameInput.onchange = () => localStorage.setItem('username', usernameInput.value.trim());
 
     // Lade gespeicherte Einstellungen
     micSelect.value = localStorage.getItem('micId') || '';
@@ -263,76 +278,58 @@
 
     // Peer initialisieren
     function initPeer() {
-      if (peer) {
-        peer.close();
-        peer = null;
-      }
+      if (peer) { peer.close(); peer = null; }
       peer = new RTCPeerConnection();
       remoteStream = new MediaStream();
       video.srcObject = remoteStream;
       remoteAudio.srcObject = remoteStream;
 
-      peer.ontrack = (e) => {
+      peer.ontrack = e => {
         e.streams[0].getTracks().forEach(track => {
           if (!remoteStream.getTracks().some(t => t.id === track.id)) {
             remoteStream.addTrack(track);
           }
         });
-        video.style.display = 'block';
-        fullscreenBtn.style.display = 'block';
+        video.style.display = 'block'; fullscreenBtn.style.display = 'block';
       };
 
       peer.onicecandidate = e => {
-        if (e.candidate) {
-          socket.emit('ice', { candidate: e.candidate, room: 'default' });
-        }
+        if (e.candidate) socket.emit('ice', { candidate: e.candidate, room: 'default' });
       };
 
-      // Puffer ICE von vor init
-      pendingIce.forEach(c => peer.addIceCandidate(c).catch(console.warn));
-      pendingIce.length = 0;
+      pendingIce.forEach(c => peer.addIceCandidate(c).catch(console.warn)); pendingIce.length = 0;
 
       peer.onnegotiationneeded = async () => {
         try {
           const offer = await peer.createOffer();
           await peer.setLocalDescription(offer);
-          socket.emit('offer', { offer, room: 'default' });
-        } catch (err) {
-          console.error('Renegotiation-Fehler:', err);
-        }
+          socket.emit('offer', { offer, room: 'default', username: usernameInput.value.trim() });
+        } catch (err) { console.error('Renegotiation-Fehler:', err); }
       };
     }
 
-    // Socket-Handler einmalig definieren
-    socket.on('offer', async (data) => {
+    // Socket-Handler einmalig
+    socket.on('offer', async data => {
       try {
         initPeer();
         localStream = await getAudioStream();
-        localStream.getAudioTracks().forEach(track => peer.addTrack(track, localStream));
+        localStream.getAudioTracks().forEach(t => peer.addTrack(t, localStream));
         await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
-        socket.emit('answer', { answer, room: 'default' });
-      } catch (err) {
-        console.error('Fehler beim Beantworten des Offers:', err);
-      }
+        socket.emit('answer', { answer, room: 'default', username: usernameInput.value.trim() });
+      } catch (err) { console.error('Fehler beim Beantworten des Offers:', err); }
     });
 
-    socket.on('answer', async (data) => {
-      try {
-        await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
-      } catch (err) {
-        console.error('Fehler beim Setzen der Remote DESCRIPTION:', err);
-      }
+    socket.on('answer', async data => {
+      try { await peer.setRemoteDescription(new RTCSessionDescription(data.answer)); }
+      catch (err) { console.error('Fehler beim Setzen Remote DESCRIPTION:', err); }
     });
 
-    socket.on('ice', async (data) => {
+    socket.on('ice', async data => {
       if (data.candidate) {
         if (!peer) pendingIce.push(data.candidate);
-        else {
-          try { await peer.addIceCandidate(data.candidate); }
-          catch (e) { console.error('ICE-Fehler:', e); }
-        }
+        else try { await peer.addIceCandidate(data.candidate); } catch (e) { console.error('ICE-Fehler:', e); }
       }
     });
 
@@ -342,45 +339,25 @@
 
     // Audio-Stream mit Fallback
     async function getAudioStream() {
-      try {
-        return await navigator.mediaDevices.getUserMedia({ audio: micSelect.value ? { deviceId: { exact: micSelect.value } } : true });
-      } catch {
-        return await navigator.mediaDevices.getUserMedia({ audio: true });
-      }
+      try { return await navigator.mediaDevices.getUserMedia({ audio: micSelect.value ? { deviceId: { exact: micSelect.value } } : true }); }
+      catch { return await navigator.mediaDevices.getUserMedia({ audio: true }); }
     }
 
     connectBtn.onclick = async () => {
       connected = !connected;
       if (connected) {
-        connectBtn.style.background = 'green';
-        chat.style.display = 'flex';
-        inputArea.style.display = 'block';
-
-        socket.connect();
-        socket.emit('join', 'default');
-        socket.emit('get_users', 'default');
-
+        connectBtn.style.background = 'green'; chat.style.display = 'flex'; inputArea.style.display = 'block';
+        socket.connect(); socket.emit('join', 'default', usernameInput.value.trim()); socket.emit('get_users', 'default');
         initPeer();
         try {
           localStream = await getAudioStream();
-          localStream.getAudioTracks().forEach(track => peer.addTrack(track, localStream));
-        } catch (err) {
-          console.error('Konnte Mikrofon nicht aktivieren:', err);
-          alert('Konnte Mikrofon nicht aktivieren.');
-        }
-
-        screenBtn.disabled = false;
+          localStream.getAudioTracks().forEach(t => peer.addTrack(t, localStream));
+        } catch (err) { console.error('Konnte Mikrofon nicht aktivieren:', err); alert('Konnte Mikrofon nicht aktivieren.'); }
+        serverBtn.disabled = false;
       } else {
-        connectBtn.style.background = 'red';
-        chat.style.display = 'none';
-        inputArea.style.display = 'none';
-        socket.disconnect();
-        if (peer) { peer.close(); peer = null; }
-        if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-        screenNotice.style.display = 'none';
-        document.body.classList.remove('with-notice');
-        screenBtn.disabled = true;
-        pendingIce.length = 0;
+        connectBtn.style.background = 'red'; chat.style.display = 'none'; inputArea.style.display = 'none';
+        socket.disconnect(); if (peer) { peer.close(); peer = null; } if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+        screenNotice.style.display = 'none'; document.body.classList.remove('with-notice'); screenBtn.disabled = true; pendingIce.length = 0;
       }
     };
 
@@ -388,26 +365,20 @@
       try {
         const [w, h] = qualitySelect.value.split('x').map(Number);
         const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: { width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: 30 } } });
-        screenStream.getTracks().forEach(track => peer.addTrack(track, screenStream));
-
-        screenNotice.style.display = 'block';
-        document.body.classList.add('with-notice');
+        screenStream.getTracks().forEach(t => peer.addTrack(t, screenStream));
+        screenNotice.style.display = 'block'; document.body.classList.add('with-notice');
         screenStream.getVideoTracks()[0].addEventListener('ended', () => {
-          screenNotice.style.display = 'none';
-          document.body.classList.remove('with-notice');
+          screenNotice.style.display = 'none'; document.body.classList.remove('with-notice');
         });
-      } catch (err) {
-        console.warn('Bildschirmfreigabe abgebrochen oder fehlgeschlagen', err);
-      }
+      } catch (err) { console.warn('Bildschirmfreigabe abgebrochen oder fehlgeschlagen', err); }
     };
 
     msg.addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        if (!msg.value.trim()) return;
-        socket.emit('message', { room: 'default', user: 'User', text: msg.value });
-        appendMsg('Du', msg.value, 'user');
-        msg.value = '';
+        e.preventDefault(); if (!msg.value.trim()) return;
+        const username = usernameInput.value.trim() || 'User';
+        socket.emit('message', { room: 'default', user: username, text: msg.value });
+        appendMsg(username, msg.value, 'user'); msg.value = '';
       }
     });
 
@@ -416,21 +387,14 @@
     clear.onclick = () => { chat.innerHTML = ''; };
 
     fileInput.addEventListener('change', async () => {
-      const files = Array.from(fileInput.files);
-      if (!files.length) return;
-      const formData = new FormData();
-      files.forEach(file => formData.append('files', file));
+      const files = Array.from(fileInput.files); if (!files.length) return;
+      const formData = new FormData(); files.forEach(f => formData.append('files', f));
       try {
         const res = await fetch('/upload', { method: 'POST', body: formData });
         if (!res.ok) throw new Error(`Server-Antwort: ${res.status} ${res.statusText}`);
-        const result = await res.json();
-        result.files.forEach(f => appendMsg('Du', `📎 <a href=\"${f.url}\" target=\"_blank\">${f.name}</a>`, 'user'));
-      } catch (err) {
-        alert('Upload fehlgeschlagen!');
-        console.error(err);
-      } finally {
-        fileInput.value = '';
-      }
+        const result = await res.json(); result.files.forEach(f => appendMsg(usernameInput.value.trim() || 'User', `📎 <a href=\"${f.url}\" target=\"_blank\">${f.name}</a>`, 'user'));
+      } catch (err) { alert('Upload fehlgeschlagen!'); console.error(err); }
+      finally { fileInput.value = ''; }
     });
 
     function appendMsg(name, text, type) {
