@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Dark Chat Overlay mit Audio, Screen & Datei-Upload (Multi-Peer)</title>
+  <title>Dark Chat Overlay mit Audio, Screen & Datei-Upload</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -18,31 +18,175 @@
       --shadow:0 4px 12px rgba(0,0,0,0.5);
       --version-text:#8e8e93;
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
-    body.with-notice .header { margin-top: 40px; }
-    .header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px; background: var(--header); box-shadow: var(--shadow); }
-    .header button, .header select, .header label, .header input { height: 36px; padding: 0 12px; background: #242426; border: 1px solid #333; border-radius: var(--radius); color: var(--text); cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    body.with-notice .header {
+      margin-top: 40px;
+    }
+
+    .header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 10px;
+      background: var(--header);
+      box-shadow: var(--shadow);
+    }
+
+    .header button,
+    .header select,
+    .header label,
+    .header input {
+      height: 36px;
+      padding: 0 12px;
+      background: #242426;
+      border: 1px solid #333;
+      border-radius: var(--radius);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
     .header input { min-width: 120px; }
-    #version { color: var(--version-text); font-size: 0.85rem; margin-right: 8px; }
+
+    #version {
+      color: var(--version-text);
+      font-size: 0.85rem;
+      margin-right: 8px;
+    }
+
     .spacer { flex: 1; }
-    #chatBody { flex: 1; overflow-y: auto; padding: 16px; display: none; flex-direction: column; gap: 10px; transition: all 0.3s ease; }
-    .chat-input { display: none; padding: 12px; background: var(--surface); border-top: 1px solid #333; transition: all 0.3s ease; }
-    .chat-input textarea { width: 100%; height: 60px; padding: 10px; border: 1px solid #333; border-radius: var(--radius); background: #242426; color: var(--text); resize: none; font-size: 14px; }
-    .message { padding: 10px 14px; border-radius: var(--radius); max-width: 70%; word-break: break-word; box-shadow: var(--shadow); position: relative; }
-    .user { background: linear-gradient(to right, var(--accent), #0051b0); color: #fff; align-self: flex-end; border-bottom-right-radius: 0; }
-    .assistant { background: linear-gradient(to right, #2c2c2c, #1a1a1a); align-self: flex-start; border-bottom-left-radius: 0; }
-    .timestamp { font-size: 12px; color: var(--muted); text-align: right; margin-top: 4px; }
-    #remoteScreen { position: fixed; bottom: 12px; right: 12px; width: 320px; height: 180px; display: none; border: 2px solid var(--accent); border-radius: var(--radius); box-shadow: var(--shadow); background: black; object-fit: contain; z-index: 10; }
-    #fullscreenBtn { position: fixed; bottom: 200px; right: 12px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius); padding: 6px 12px; cursor: pointer; display: none; z-index: 999; }
-    #screenNotice { display: none; position: fixed; top: 0; left: 0; width: 100%; background: var(--success); color: white; padding: 10px 16px; text-align: center; font-weight: 600; font-size: 15px; z-index: 9999; box-shadow: 0 2px 8px rgba(0,0,0,0.3); animation: slideDown 0.3s ease-out; }
-    @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    #chatBody {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      transition: all 0.3s ease;
+    }
+
+    .chat-input {
+      display: none;
+      padding: 12px;
+      background: var(--surface);
+      border-top: 1px solid #333;
+      transition: all 0.3s ease;
+    }
+
+    .chat-input textarea {
+      width: 100%; height: 60px;
+      padding: 10px;
+      border: 1px solid #333;
+      border-radius: var(--radius);
+      background: #242426;
+      color: var(--text);
+      resize: none;
+      font-size: 14px;
+    }
+
+    .message {
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      max-width: 70%;
+      word-break: break-word;
+      box-shadow: var(--shadow);
+      position: relative;
+    }
+
+    .user {
+      background: linear-gradient(to right, var(--accent), #0051b0);
+      color: #fff;
+      align-self: flex-end;
+      border-bottom-right-radius: 0;
+    }
+
+    .assistant {
+      background: linear-gradient(to right, #2c2c2c, #1a1a1a);
+      align-self: flex-start;
+      border-bottom-left-radius: 0;
+    }
+
+    .timestamp {
+      font-size: 12px;
+      color: var(--muted);
+      text-align: right;
+      margin-top: 4px;
+    }
+
+    #remoteScreen {
+      position: fixed;
+      bottom: 12px; right: 12px;
+      width: 320px; height: 180px;
+      display: none;
+      border: 2px solid var(--accent);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      background: black;
+      object-fit: contain;
+      z-index: 10;
+    }
+
+    #remoteScreen:fullscreen {
+      width: 100vw; height: 100vh;
+    }
+
+    #fullscreenBtn {
+      position: fixed;
+      bottom: 200px; right: 12px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      padding: 6px 12px;
+      cursor: pointer;
+      display: none; z-index: 999;
+    }
+
+    #screenNotice {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%;
+      background: var(--success);
+      color: white;
+      padding: 10px 16px;
+      text-align: center;
+      font-weight: 600;
+      font-size: 15px;
+      z-index: 9999;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      animation: slideDown 0.3s ease-out;
+    }
+
+    @keyframes slideDown {
+      from { transform: translateY(-100%); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+
     audio { display: none; }
     a { color: var(--accent); text-decoration: none; }
   </style>
 </head>
 <body>
   <div id="screenNotice">🟢 Bildschirm wird geteilt</div>
+
   <div class="header">
     <span id="version"></span>
     <input id="usernameInput" placeholder="Benutzername" />
@@ -55,19 +199,28 @@
       <option value="3840x2160">4K (2160p)</option>
     </select>
     <button id="screenBtn">🖥️ Teilen</button>
-    <label id="uploadBtn" title="Dateien hochladen">📁 Hochladen<input id="fileInput" type="file" multiple style="display: none;"></label>
+    <label id="uploadBtn" title="Dateien hochladen">
+      📁 Hochladen
+      <input id="fileInput" type="file" multiple style="display: none;">
+    </label>
     <button id="clearBtn">🗑️ Leeren</button>
     <div class="spacer"></div>
     <div id="userList" style="padding: 8px; font-size: 0.85rem; color: var(--muted);"></div>
   </div>
+
   <div id="chatBody"></div>
-  <div class="chat-input"><textarea id="messageInput" placeholder="Nachricht schreiben..."></textarea></div>
+  <div class="chat-input">
+    <textarea id="messageInput" placeholder="Nachricht schreiben..."></textarea>
+  </div>
+
   <video id="remoteScreen" autoplay playsinline></video>
   <button id="fullscreenBtn">🔎 Vollbild</button>
   <audio id="remoteAudio" autoplay></audio>
+
   <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
   <script>
-    const VERSION = '1.0.1';
+    // Version
+    const VERSION = '1.0.0';
     document.getElementById('version').textContent = 'v' + VERSION;
 
     const socket = io('/', { autoConnect: false });
@@ -86,10 +239,12 @@
     const userList = document.getElementById('userList');
     const usernameInput = document.getElementById('usernameInput');
 
+    let connected = false;
+    let peer = null;
     let localStream = null;
-    const peers = {};
-    const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+    let remoteStream = new MediaStream();
 
+    // Load saved username
     if (localStorage.getItem('username')) {
       usernameInput.value = localStorage.getItem('username');
     }
@@ -102,142 +257,87 @@
         const devices = await navigator.mediaDevices.enumerateDevices();
         micSelect.innerHTML = '';
         devices.filter(d => d.kind === 'audioinput').forEach((d,i) => {
-          const opt = document.createElement('option');
-          opt.value = d.deviceId;
-          opt.text = d.label || `Mic ${i+1}`;
-          micSelect.append(opt);
+          const opt=document.createElement('option');opt.value=d.deviceId;opt.text=d.label||`Mic ${i+1}`;micSelect.append(opt);
         });
-      } catch(e) { console.error(e); }
+      } catch(e){console.error(e);}
     }
     loadMicrophones();
 
-    connectBtn.onclick = async () => {
-      if (!usernameInput.value.trim()) {
-        alert('Bitte Benutzernamen eingeben.');
-        return;
-      }
-      localStorage.setItem('username', usernameInput.value.trim());
-      socket.connect();
-      socket.emit('join', { room: 'default', user: usernameInput.value.trim() });
-      connectBtn.style.background = 'green';
-      chat.style.display = 'flex';
-      inputArea.style.display = 'block';
+    function initPeer() {
+      peer=new RTCPeerConnection();
+      remoteStream=new MediaStream();
+      video.srcObject=remoteStream;
+      remoteAudio.srcObject=remoteStream;
+      peer.ontrack=e=>e.streams[0].getTracks().forEach(t=>{if(!remoteStream.getTracks().some(x=>x.id===t.id))remoteStream.addTrack(t)}),video.style.display='block',fullscreenBtn.style.display='block';
+      peer.onicecandidate=e=>e.candidate&&socket.emit('ice',{candidate:e.candidate,room:'default'});
+    }
 
-      const mic = micSelect.value;
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: mic } } });
-
-      socket.on('users', async ({ peers: userPeers }) => {
-        userList.innerHTML = '🧑‍🤝‍🧑 Verbundene:<br>' + userPeers.map(u => `• ${u.username}`).join('<br>');
-        for (const p of userPeers) {
-          if (p.id === socket.id || peers[p.id]) continue;
-          createPeer(p.id, true);
-        }
-      });
-
-      socket.on('user-joined', ({ id }) => {
-        createPeer(id, true);
-      });
-
-      socket.on('user-left', ({ id }) => {
-        if (peers[id]) {
-          peers[id].close();
-          delete peers[id];
-        }
-      });
-
-      socket.on('offer', async ({ from, sdp }) => {
-        if (!peers[from]) createPeer(from, false);
-        const pc = peers[from];
-        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        socket.emit('answer', { to: from, sdp: pc.localDescription });
-      });
-
-      socket.on('answer', async ({ from, sdp }) => {
-        const pc = peers[from];
-        if (!pc) return;
-        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-      });
-
-      socket.on('ice', async ({ from, candidate }) => {
-        const pc = peers[from];
-        if (!pc) return;
-        try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) { console.error(e); }
-      });
-
-      msg.addEventListener('keydown', e => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          if (!msg.value.trim()) return;
-          socket.emit('message', { room: 'default', user: usernameInput.value, text: msg.value });
-          appendMsg(usernameInput.value, msg.value, 'user');
-          msg.value = '';
-        }
-      });
-
-      socket.on('message', d => appendMsg(d.user, d.text, 'assistant'));
-
-      clear.onclick = () => chat.innerHTML = '';
-
-      fileInput.addEventListener('change', async () => {
-        const files = Array.from(fileInput.files);
-        if (!files.length) return;
-        const fd = new FormData();
-        files.forEach(f => fd.append('files', f));
-        try {
-          const res = await fetch('/upload', { method: 'POST', body: fd });
-          if (!res.ok) throw new Error(res.statusText);
-          const r = await res.json();
-          r.files.forEach(f => appendMsg(usernameInput.value, `📎 <a href="${f.url}" target="_blank">${f.name}</a>`, 'user'));
-        } catch(e) {
-          alert('Upload fehlgeschlagen!'); console.error(e);
-        } finally { fileInput.value = ''; }
-      });
-
-      screenBtn.onclick = async () => {
-        const [w, h] = qualitySelect.value.split('x').map(Number);
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: { width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: 30 } } });
-        for (const track of screenStream.getTracks()) {
-          for (const id in peers) peers[id].addTrack(track, screenStream);
-        }
-        screenNotice.style.display = 'block';
-        document.body.classList.add('with-notice');
-        screenStream.getVideoTracks()[0].addEventListener('ended', () => {
-          screenNotice.style.display = 'none';
-          document.body.classList.remove('with-notice');
-        });
-      };
-
-      function createPeer(id, isInitiator) {
-        const pc = new RTCPeerConnection(config);
-        peers[id] = pc;
-        localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-        const remoteStream = new MediaStream();
-        pc.ontrack = e => {
-          e.streams[0].getTracks().forEach(track => remoteStream.addTrack(track));
-          video.srcObject = remoteStream;
-          video.style.display = 'block';
-          fullscreenBtn.style.display = 'block';
-        };
-        pc.onicecandidate = e => {
-          if (e.candidate) socket.emit('ice', { to: id, candidate: e.candidate });
-        };
-        pc.onnegotiationneeded = async () => {
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          socket.emit('offer', { to: id, sdp: pc.localDescription });
-        };
-        if (isInitiator) {
-          // negotiationneeded will fire automatically
-        }
+    connectBtn.onclick=async()=>{
+      if(!usernameInput.value.trim()){alert('Bitte Benutzernamen eingeben.');return;}const username=usernameInput.value.trim();localStorage.setItem('username',username);
+      connected=!connected;
+      if(connected){
+        connectBtn.style.background='green';
+        chat.style.display='flex';inputArea.style.display='block';
+        socket.connect();socket.emit('join','default');socket.emit('get_users','default');
+        const mic=micSelect.value;
+        localStream=await navigator.mediaDevices.getUserMedia({audio:{deviceId:{exact:mic}}});
+        initPeer();
+        localStream.getTracks().forEach(t=>peer.addTrack(t,localStream));
+        const offer=await peer.createOffer();await peer.setLocalDescription(offer);
+        socket.emit('offer',{offer,room:'default',user:username});
+      } else {
+        connectBtn.style.background='red';chat.style.display='none';inputArea.style.display='none';
+        socket.disconnect();peer&&peer.close();localStream&&localStream.getTracks().forEach(t=>t.stop());
+        screenNotice.style.display='none';document.body.classList.remove('with-notice');
       }
     };
 
-    function appendMsg(name, text, type) {
-      const t = new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
-      chat.innerHTML += `<div class="message ${type}"><strong>${name}:</strong> ${text}<div class="timestamp">${t}</div></div>`;
-      chat.scrollTop = chat.scrollHeight;
+    screenBtn.onclick=async()=>{
+      const [w,h]=qualitySelect.value.split('x').map(Number);
+      const s=await navigator.mediaDevices.getDisplayMedia({video:{width:{ideal:w},height:{ideal:h},frameRate:{ideal:30}}});
+      s.getTracks().forEach(t=>peer.addTrack(t,s));
+      const o=await peer.createOffer();await peer.setLocalDescription(o);
+      socket.emit('offer',{offer:o,room:'default'});
+      screenNotice.style.display='block';document.body.classList.add('with-notice');
+      s.getVideoTracks()[0].addEventListener('ended',()=>{screenNotice.style.display='none';document.body.classList.remove('with-notice');});
+    };
+
+    socket.on('offer',async data=>{
+      const mic=micSelect.value;
+      localStream=await navigator.mediaDevices.getUserMedia({audio:{deviceId:{exact:mic}}});
+      initPeer();localStream.getTracks().forEach(t=>peer.addTrack(t,localStream));
+      await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
+      const ans=await peer.createAnswer();await peer.setLocalDescription(ans);
+      socket.emit('answer',{answer:ans,room:'default'});
+    });
+
+    socket.on('answer',async data=>await peer.setRemoteDescription(new RTCSessionDescription(data.answer)));
+
+    socket.on('ice',async data=>{if(data.candidate)try{await peer.addIceCandidate(new RTCIceCandidate(data.candidate));}catch(e){console.error(e);}});
+
+    msg.addEventListener('keydown',e=>{
+      if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(!msg.value.trim())return;
+        socket.emit('message',{room:'default',user:usernameInput.value,text:msg.value});
+        appendMsg(usernameInput.value,msg.value,'user');msg.value='';
+      }
+    });
+
+    socket.on('message',d=>appendMsg(d.user,d.text,'assistant'));
+
+    socket.on('users',users=>{userList.innerHTML='🧑‍🤝‍🧑 Verbundene:<br>'+users.map(u=>`• ${u}`).join('<br>');});
+
+    clear.onclick=()=>chat.innerHTML='';
+
+    fileInput.addEventListener('change',async()=>{const files=Array.from(fileInput.files);if(!files.length)return;const fd=new FormData();files.forEach(f=>fd.append('files',f));
+      try{const res=await fetch('/upload',{method:'POST',body:fd});if(!res.ok)throw new Error(res.statusText);
+        const r=await res.json();r.files.forEach(f=>appendMsg(usernameInput.value,`📎 <a href="${f.url}" target="_blank">${f.name}</a>`,'user'));
+      }catch(e){alert('Upload fehlgeschlagen!');console.error(e);}finally{fileInput.value='';}
+    });
+
+    function appendMsg(name,text,type){
+      const t=new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+      chat.innerHTML+=`<div class="message ${type}"><strong>${name}:</strong> ${text}<div class="timestamp">${t}</div></div>`;
+      chat.scrollTop=chat.scrollHeight;
     }
   </script>
 </body>
