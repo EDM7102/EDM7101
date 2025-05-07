@@ -1,4 +1,3 @@
-<!-- EDMBOOK mit vollständiger Verbindung & Mikrofon-Fix -->
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -100,6 +99,10 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
     let socket;
+    let peer = null;
+    let localStream = null;
+    let remoteStream = null;
+
     const usernameInput = document.getElementById('username');
     const connectBtn = document.getElementById('connectBtn');
     const disconnectBtn = document.getElementById('disconnectBtn');
@@ -114,35 +117,7 @@
     const myOffline = document.getElementById('myOffline');
     const remoteOffline = document.getElementById('remoteOffline');
 
-    let username = '', userColor = '', peer = null, localStream = null;
-    let users = [];
-
-    async function initSocket() {
-      socket = io();
-      socket.on('message', handleMessage);
-      socket.on('users', updateUserList);
-      socket.on('offer', handleOffer);
-      socket.on('answer', ({ sdp }) => peer.setRemoteDescription(new RTCSessionDescription(sdp)));
-      socket.on('ice', ({ candidate }) => peer.addIceCandidate(new RTCIceCandidate(candidate)));
-    }
-
-    function handleMessage({ username, text, color }) {
-      const msg = document.createElement('div');
-      msg.classList.add('message');
-      msg.innerHTML = `<span class="name" style="color:${color}">${username}:</span> ${text}`;
-      messages.appendChild(msg);
-      messages.scrollTop = messages.scrollHeight;
-    }
-
-    function updateUserList(list) {
-      userList.innerHTML = '';
-      users = list.filter(u => u.name !== username);
-      list.forEach(u => {
-        const li = document.createElement('li');
-        li.textContent = u.name;
-        userList.appendChild(li);
-      });
-    }
+    let username = '', userColor = '', users = [];
 
     async function updateMicList() {
       micSelect.innerHTML = '';
@@ -152,6 +127,47 @@
         opt.value = d.deviceId;
         opt.textContent = d.label || `Mikrofon ${i+1}`;
         micSelect.appendChild(opt);
+      });
+    }
+
+    async function initSocket() {
+      socket = io();
+      socket.on('message', ({ username, text, color }) => {
+        const msg = document.createElement('div');
+        msg.classList.add('message');
+        msg.innerHTML = `<span class="name" style="color:${color}">${username}:</span> ${text}`;
+        messages.appendChild(msg);
+        messages.scrollTop = messages.scrollHeight;
+      });
+      socket.on('users', list => {
+        userList.innerHTML = '';
+        users = list.filter(u => u.name !== username);
+        list.forEach(u => {
+          const li = document.createElement('li');
+          li.textContent = u.name;
+          userList.appendChild(li);
+        });
+      });
+      socket.on('offer', async ({ from, sdp }) => {
+        peer = new RTCPeerConnection();
+        peer.onicecandidate = e => e.candidate && socket.emit('ice', { target: from, candidate: e.candidate });
+        peer.ontrack = e => {
+          remoteVideo.srcObject = e.streams[0];
+          remoteVideo.style.display = 'block';
+          remoteOffline.style.display = 'none';
+        };
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(t => peer.addTrack(t, stream));
+        await peer.setRemoteDescription(new RTCSessionDescription(sdp));
+        const answer = await peer.createAnswer();
+        await peer.setLocalDescription(answer);
+        socket.emit('answer', { target: from, sdp: answer });
+      });
+      socket.on('answer', ({ sdp }) => {
+        peer.setRemoteDescription(new RTCSessionDescription(sdp));
+      });
+      socket.on('ice', ({ candidate }) => {
+        peer.addIceCandidate(new RTCIceCandidate(candidate));
       });
     }
 
@@ -165,6 +181,25 @@
       socket.emit('join', { username });
       connectBtn.style.display = 'none';
       disconnectBtn.style.display = 'inline-block';
+
+      try {
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        localStream = audioStream;
+        if (users.length === 0) return;
+        peer = new RTCPeerConnection();
+        localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
+        peer.onicecandidate = e => e.candidate && socket.emit('ice', { target: users[0].id, candidate: e.candidate });
+        peer.ontrack = e => {
+          remoteVideo.srcObject = e.streams[0];
+          remoteVideo.style.display = 'block';
+          remoteOffline.style.display = 'none';
+        };
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        socket.emit('offer', { target: users[0].id, sdp: offer });
+      } catch (err) {
+        alert('Mikrofonzugriff fehlgeschlagen.');
+      }
     });
 
     disconnectBtn.addEventListener('click', () => {
@@ -205,6 +240,7 @@
         myVideo.srcObject = localStream;
         myVideo.style.display = 'block';
         myOffline.style.display = 'none';
+
         if (users.length === 0) return;
         peer = new RTCPeerConnection();
         localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
@@ -221,22 +257,6 @@
         alert('Freigabe fehlgeschlagen.');
       }
     });
-
-    async function handleOffer({ from, sdp }) {
-      peer = new RTCPeerConnection();
-      peer.onicecandidate = e => e.candidate && socket.emit('ice', { target: from, candidate: e.candidate });
-      peer.ontrack = e => {
-        remoteVideo.srcObject = e.streams[0];
-        remoteVideo.style.display = 'block';
-        remoteOffline.style.display = 'none';
-      };
-      await peer.setRemoteDescription(new RTCSessionDescription(sdp));
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(t => peer.addTrack(t, stream));
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      socket.emit('answer', { target: from, sdp: answer });
-    }
 
     function toggleFullscreen(id) {
       const el = document.getElementById(id);
