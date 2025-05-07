@@ -1,343 +1,125 @@
-// --- Hilfsfunktion gegen XSS ---
-function escapeHTML(str) {
-  return String(str).replace(/[&<>"']/g, m => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[m]));
-}
+const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io');
+const path = require('path');
 
-// --- Globale Variablen ---
-let socket, peer = null, localStream = null, username = '', userColor = '';
-let users = [];
-const userColors = [
-  '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6',
-  '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3'
-];
-let typingTimeout = null;
-let typingUsers = new Set();
+const app = express();
+const server = http.createServer(app);
+const io = socketIo(server);
 
-// --- UI-Elemente ---
-const usernameInput = document.getElementById('username');
-const connectBtn = document.getElementById('connectBtn');
-const disconnectBtn = document.getElementById('disconnectBtn');
-const shareScreenBtn = document.getElementById('shareScreenBtn');
-const messages = document.getElementById('messages');
-const userList = document.querySelector('#userList ul');
-const micSelect = document.getElementById('mic');
-const messageInput = document.getElementById('messageInput');
-const sendBtn = document.getElementById('sendBtn');
-const myVideo = document.getElementById('myVideo');
-const remoteVideo = document.getElementById('remoteVideo');
-const myOffline = document.getElementById('myOffline');
-const remoteOffline = document.getElementById('remoteOffline');
-const errorDiv = document.getElementById('errorMsg');
-const typingIndicator = document.getElementById('typingIndicator');
-const fileInput = document.getElementById('fileInput');
-const connectionStatus = document.getElementById('connectionStatus');
-const notifSound = document.getElementById('notifSound');
+const PORT = process.env.PORT || 3000;
 
-// --- Fehleranzeige ---
-function showError(msg) {
-  errorDiv.textContent = msg;
-  errorDiv.style.display = 'block';
-  setTimeout(() => { errorDiv.style.display = 'none'; }, 4000);
-}
+// Speichert die verbundenen Benutzer: { socketId: { username, color, id } }
+const connectedUsers = new Map();
 
-// --- Verbindungsstatus-Badge ---
-function setConnectionStatus(connected) {
-  if (connected) {
-    connectionStatus.textContent = "🟢 Verbunden";
-    connectionStatus.className = "status-badge connected";
-  } else {
-    connectionStatus.textContent = "🔴 Getrennt";
-    connectionStatus.className = "status-badge disconnected";
-  }
-}
-setConnectionStatus(false);
+// Statische Dateien ausliefern (HTML, CSS, Client-JS)
+// Erstelle einen Ordner "public" und lege deine index.html, app.js, style.css etc. dort hinein.
+app.use(express.static(path.join(__dirname, 'public')));
 
-function playNotifSound() {
-  notifSound.currentTime = 0;
-  notifSound.play();
-}
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
-// --- PeerConnection-Erstellung ---
-function createPeer(targetId) {
-  const pc = new RTCPeerConnection();
-  pc.onicecandidate = e => e.candidate && socket.emit('ice', { target: targetId, candidate: e.candidate });
-  pc.ontrack = e => {
-    remoteVideo.srcObject = e.streams[0];
-    remoteVideo.style.display = 'block';
-    remoteOffline.style.display = 'none';
-  };
-  return pc;
-}
+io.on('connection', (socket) => {
+    console.log(`Neuer Benutzer verbunden: ${socket.id}`);
 
-// --- Mikrofonliste aktualisieren ---
-async function updateMicList() {
-  micSelect.innerHTML = '';
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    devices.filter(d => d.kind === 'audioinput').forEach((d, i) => {
-      const opt = document.createElement('option');
-      opt.value = d.deviceId;
-      opt.textContent = d.label || `Mikrofon ${i+1}`;
-      micSelect.appendChild(opt);
+    // Benutzer tritt dem Chat bei
+    socket.on('join', (data) => {
+        if (!data.username || data.username.trim() === '') {
+            socket.emit('joinError', { message: 'Benutzername darf nicht leer sein.' });
+            return;
+        }
+        // Optional: Prüfen, ob Benutzername bereits vergeben ist
+        // for (let user of connectedUsers.values()) {
+        //     if (user.username === data.username) {
+        //         socket.emit('joinError', { message: 'Benutzername bereits vergeben.' });
+        //         return;
+        //     }
+        // }
+
+        const newUser = {
+            id: socket.id,
+            username: data.username,
+            color: data.color,
+        };
+        connectedUsers.set(socket.id, newUser);
+
+        // Erfolgsmeldung an den neuen Benutzer mit seiner ID und der aktuellen Benutzerliste
+        socket.emit('joinSuccess', {
+            id: socket.id,
+            users: Array.from(connectedUsers.values())
+        });
+
+        // Alle anderen über den neuen Benutzer informieren (Update der Benutzerliste)
+        // Wichtig: 'userListUpdate' wird auch an den neu beigetretenen Benutzer gesendet,
+        // damit seine eigene Liste auch durch diese Logik aktualisiert wird.
+        io.emit('userListUpdate', Array.from(connectedUsers.values()));
+
+        console.log(`${data.username} (${socket.id}) ist beigetreten. Aktuelle Benutzer: ${connectedUsers.size}`);
     });
-  } catch (e) {
-    showError('Keine Mikrofone gefunden.');
-  }
-}
 
-// --- Audio-Initialisierung ---
-async function initializeAudio() {
-  try {
-    const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    localStream = new MediaStream();
-    audioStream.getTracks().forEach((track) => localStream.addTrack(track));
-  } catch (error) {
-    console.error("Fehler bei der Initialisierung des Audio-Streams:", error);
-    showError("Mikrofonzugriff fehlgeschlagen.");
-  }
-}
-
-// --- Socket-Initialisierung ---
-async function initSocket() {
-  socket = io();
-  socket.on('message', ({ username: uname, text, color }) => {
-    appendMessage(uname, text, color);
-    if (uname !== username) playNotifSound();
-  });
-  socket.on('file', ({ username: uname, fileName, fileType, fileData, color }) => {
-    appendFileMessage(uname, fileName, fileType, fileData, color);
-    if (uname !== username) playNotifSound();
-  });
-  socket.on('users', list => {
-    if (users.length && list.length > users.length) playNotifSound();
-    updateUserList(list);
-    users = list.filter(u => u.name !== username);
-  });
-  socket.on('offer', async ({ from, sdp }) => {
-    if (!peer) {
-      peer = createPeer(from);
-      if (localStream) localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
-    }
-    await peer.setRemoteDescription(new RTCSessionDescription(sdp));
-    const answer = await peer.createAnswer();
-    await peer.setLocalDescription(answer);
-    socket.emit('answer', { target: from, sdp: answer });
-  });
-  socket.on('answer', ({ sdp }) => {
-    peer && peer.setRemoteDescription(new RTCSessionDescription(sdp));
-  });
-  socket.on('ice', ({ candidate }) => {
-    peer && peer.addIceCandidate(new RTCIceCandidate(candidate));
-  });
-
-  socket.on('typing', ({ username: typingUser }) => {
-    if (typingUser !== username) {
-      typingUsers.add(typingUser);
-      updateTypingIndicator();
-      playNotifSound();
-    }
-    if (typingTimeout) clearTimeout(typingTimeout);
-    typingTimeout = setTimeout(() => {
-      typingUsers.delete(typingUser);
-      updateTypingIndicator();
-    }, 2000);
-  });
-
-  socket.on('joinError', ({ message }) => {
-    showError(message);
-    setConnectionStatus(false);
-    socket.disconnect();
-  });
-}
-
-// --- Nachrichten & Dateien einfügen mit Animation ---
-function appendMessage(uname, text, color) {
-  const msg = document.createElement('div');
-  msg.classList.add('message');
-  if (uname === username) msg.classList.add('me');
-  msg.innerHTML = `<span class="name" style="color:${color}">${escapeHTML(uname)}:</span> ${escapeHTML(text)}`;
-  messages.appendChild(msg);
-  msg.style.opacity = "0";
-  setTimeout(()=>msg.style.opacity = "1", 20);
-  messages.scrollTop = messages.scrollHeight;
-}
-function appendFileMessage(uname, fileName, fileType, fileData, color) {
-  const msg = document.createElement('div');
-  msg.classList.add('message');
-  if (uname === username) msg.classList.add('me');
-  let content = `<span class="name" style="color:${color}">${escapeHTML(uname)}:</span> `;
-  if (fileType.startsWith('image/')) {
-    content += `<a href="${fileData}" target="_blank"><img src="${fileData}" alt="${escapeHTML(fileName)}" /></a>`;
-  } else {
-    content += `<span class="file-attachment"><a href="${fileData}" download="${escapeHTML(fileName)}">${escapeHTML(fileName)}</a></span>`;
-  }
-  msg.innerHTML = content;
-  messages.appendChild(msg);
-  msg.style.opacity = "0";
-  setTimeout(()=>msg.style.opacity = "1", 20);
-  messages.scrollTop = messages.scrollHeight;
-}
-
-// --- Nutzerliste animieren ---
-function updateUserList(list) {
-  userList.innerHTML = '';
-  list.forEach(u => {
-    const li = document.createElement('li');
-    li.innerHTML = `<span class="user-dot"></span> ${escapeHTML(u.name)}`;
-    userList.appendChild(li);
-  });
-}
-
-function updateTypingIndicator() {
-  if (typingUsers.size > 0) {
-    typingIndicator.textContent = [...typingUsers].join(', ') + ' schreibt...';
-    typingIndicator.style.display = 'block';
-  } else {
-    typingIndicator.style.display = 'none';
-  }
-}
-
-// --- Benutzername aus LocalStorage laden ---
-document.addEventListener('DOMContentLoaded', () => {
-  const savedName = localStorage.getItem('username');
-  if (savedName) usernameInput.value = savedName;
-  if (Notification.permission !== "granted") {
-    Notification.requestPermission();
-  }
-});
-
-// --- Verbinden ---
-connectBtn.addEventListener('click', async () => {
-  await updateMicList();
-  await initializeAudio();
-  await initSocket();
-  username = usernameInput.value.trim();
-  localStorage.setItem('username', username);
-  if (!username) return showError('Bitte Benutzernamen eingeben.');
-  usernameInput.readOnly = true;
-  userColor = userColors[Math.floor(Math.random() * userColors.length)];
-  socket.emit('join', { username });
-  connectBtn.style.display = 'none';
-  disconnectBtn.style.display = 'inline-block';
-  setConnectionStatus(true);
-
-  try {
-    if (users.length === 0) return;
-    peer = createPeer(users[0].id);
-    if (localStream) localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
-    socket.emit('offer', { target: users[0].id, sdp: offer });
-  } catch (err) {
-    showError('Mikrofonzugriff fehlgeschlagen.');
-  }
-});
-
-// --- Trennen ---
-disconnectBtn.addEventListener('click', () => {
-  if (socket) socket.disconnect();
-  connectBtn.style.display = 'inline-block';
-  disconnectBtn.style.display = 'none';
-  usernameInput.readOnly = false;
-  messages.innerHTML = '';
-  userList.innerHTML = '';
-  typingIndicator.style.display = 'none';
-  typingUsers.clear();
-  [myVideo, remoteVideo].forEach(v => {
-    if (v.srcObject) v.srcObject.getTracks().forEach(t => t.stop());
-    v.srcObject = null;
-    v.style.display = 'none';
-  });
-  myOffline.style.display = 'block';
-  remoteOffline.style.display = 'block';
-  setConnectionStatus(false);
-  peer = null;
-});
-
-// --- Nachricht senden ---
-sendBtn.addEventListener('click', () => {
-  const text = messageInput.value.trim();
-  if (!text || !username) return;
-  socket.emit('message', { username, text, color: userColor });
-  messageInput.value = '';
-  socket.emit('typing', { username, typing: false });
-});
-
-// --- Senden mit Enter ---
-messageInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendBtn.click();
-  }
-});
-
-// --- Tippanzeige beim Tippen ---
-messageInput.addEventListener('input', () => {
-  if (username && socket) socket.emit('typing', { username, typing: true });
-});
-
-// --- Datei-Upload ---
-fileInput.addEventListener('change', () => {
-  const file = fileInput.files[0];
-  if (!file) return;
-  if (file.size > 5 * 1024 * 1024) {
-    showError('Datei zu groß (max. 5MB).');
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    socket.emit('file', {
-      username,
-      fileName: file.name,
-      fileType: file.type,
-      fileData: e.target.result,
-      color: userColor
+    // Nachrichtenverarbeitung
+    socket.on('message', (msgData) => {
+        const sender = connectedUsers.get(socket.id);
+        if (sender) {
+            // Sende die Nachricht an alle verbundenen Clients außer dem Absender selbst
+            // socket.broadcast.emit('message', { ...msgData, username: sender.username, color: sender.color });
+            // Oder an alle, inklusive Absender (Client kann Duplikate filtern oder auch nicht)
+            // Deine Client-Logik `appendMessageToDOM` fügt die eigene Nachricht schon hinzu,
+            // daher ist es besser, wenn der Server die Nachricht an alle *anderen* sendet,
+            // oder der Client intelligent genug ist, doppelte Nachrichten zu ignorieren.
+            // Für Einfachheit senden wir es an alle und der Client kann entscheiden.
+            // In deiner app.js wird die eigene Nachricht nicht optimistisch hinzugefügt,
+            // daher ist es okay, wenn der Server sie zurücksendet.
+            io.emit('message', { ...msgData, username: sender.username, color: sender.color });
+            console.log(`Nachricht von ${sender.username}: ${msgData.text}`);
+        }
     });
-  };
-  reader.readAsDataURL(file);
-  fileInput.value = '';
-});
 
-// --- Datei-Auswahl öffnen per Klick auf Büroklammer ---
-document.querySelector('.file-upload-label').addEventListener('click', () => {
-  fileInput.click();
-});
-
-// --- Bildschirm teilen ---
-shareScreenBtn.addEventListener('click', async () => {
-  try {
-    const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-    localStream.getVideoTracks().forEach(track => {
-      localStream.removeTrack(track);
-      if (peer) {
-        const senders = peer.getSenders().filter(s => s.track && s.track.kind === 'video');
-        senders.forEach(sender => peer.removeTrack(sender));
-      }
+    // Dateiverarbeitung
+    socket.on('file', (fileMsgData) => {
+        const sender = connectedUsers.get(socket.id);
+        if (sender) {
+            io.emit('file', { ...fileMsgData, username: sender.username, color: sender.color });
+            console.log(`Datei von ${sender.username}: ${fileMsgData.fileName}`);
+        }
     });
-    displayStream.getVideoTracks().forEach(track => {
-      localStream.addTrack(track);
-      if (peer) {
-        peer.addTrack(track, localStream);
-      }
-    });
-    myVideo.srcObject = new MediaStream([...displayStream.getVideoTracks(), ...localStream.getAudioTracks()]);
-    myVideo.style.display = 'block';
-    myOffline.style.display = 'none';
 
-    if (peer && users.length > 0) {
-      const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
-      socket.emit('offer', { target: users[0].id, sdp: offer });
-    }
-  } catch (err) {
-    showError('Bildschirmfreigabe fehlgeschlagen.');
-  }
+    // Tipp-Indikator
+    socket.on('typing', (data) => {
+        const sender = connectedUsers.get(socket.id);
+        if (sender) {
+            socket.broadcast.emit('typing', { username: sender.username, isTyping: data.isTyping });
+        }
+    });
+
+    // WebRTC Signalisierungsnachrichten weiterleiten
+    socket.on('webrtcSignaling', (data) => {
+        const sender = connectedUsers.get(socket.id);
+        if (sender && data.target) {
+            // console.log(`WebRTC Signal von ${sender.username} (${socket.id}) an ${data.target}: ${data.type}`);
+            // Füge 'from' hinzu, damit der Empfänger weiß, von wem die Nachricht kommt.
+            io.to(data.target).emit('webrtcSignaling', { ...data, from: socket.id });
+        } else if (sender && !data.target) {
+            console.warn(`WebRTC Signal von ${sender.username} ohne Ziel empfangen.`);
+        }
+    });
+
+    // Benutzer verlässt den Chat
+    socket.on('disconnect', (reason) => {
+        const disconnectingUser = connectedUsers.get(socket.id);
+        if (disconnectingUser) {
+            console.log(`${disconnectingUser.username} (${socket.id}) hat die Verbindung getrennt. Grund: ${reason}`);
+            connectedUsers.delete(socket.id);
+            // Alle verbleibenden Benutzer über die Änderung informieren
+            io.emit('userListUpdate', Array.from(connectedUsers.values()));
+            console.log(`Aktuelle Benutzer: ${connectedUsers.size}`);
+        } else {
+            console.log(`Unbekannter Benutzer (${socket.id}) hat die Verbindung getrennt. Grund: ${reason}`);
+        }
+    });
 });
 
-// --- Vollbild ---
-window.toggleFullscreen = function(id) {
-  const el = document.getElementById(id);
-  if (!document.fullscreenElement) el.requestFullscreen(); else document.exitFullscreen();
-};
+server.listen(PORT, () => {
+    console.log(`Server läuft auf http://localhost:${PORT}`);
+});
