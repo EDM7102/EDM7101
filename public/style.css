@@ -1,0 +1,411 @@
+:root {
+    --primary-bg: #2c3e50; /* Dunkelblau-Grau */
+    --secondary-bg: #34495e; /* Etwas helleres Blau-Grau */
+    --accent-color: #3498db; /* Helles Blau */
+    --text-color: #ecf0f1; /* Sehr helles Grau / Weiß */
+    --text-secondary-color: #bdc3c7; /* Helleres Grau */
+    --error-color: #e74c3c; /* Rot */
+    --success-color: #2ecc71; /* Grün */
+    --typing-indicator-color: #95a5a6; /* Grau */
+    --message-bg-me: #2980b9; /* Eigenes Nachrichtenblau */
+    --message-bg-other: #7f8c8d; /* Fremde Nachrichtengrau */
+    --border-color: #4a627a;
+    --input-bg: #22303f;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    background-color: var(--primary-bg);
+    color: var(--text-color);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+.app-container {
+    width: 95%;
+    max-width: 1400px;
+    height: 90vh;
+    max-height: 900px;
+    background-color: var(--secondary-bg);
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.app-header {
+    background-color: #1f2b38;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.app-header h1 {
+    margin: 0;
+    font-size: 1.4em;
+    color: var(--accent-color);
+}
+
+.status-indicator {
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-weight: bold;
+}
+.status-indicator.connected { background-color: var(--success-color); color: white; }
+.status-indicator.disconnected { background-color: var(--error-color); color: white; }
+.status-indicator.connecting { background-color: #f39c12; color: white; }
+
+
+.main-content {
+    display: flex;
+    flex-grow: 1;
+    overflow: hidden; /* Wichtig für scrollbare Bereiche */
+}
+
+.sidebar {
+    width: 280px;
+    background-color: var(--primary-bg);
+    padding: 15px;
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    overflow-y: auto;
+}
+
+.connection-controls h2, .user-list-container h2 {
+    font-size: 1.1em;
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: var(--accent-color);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 5px;
+}
+
+.connection-controls input[type="text"],
+.connection-controls select {
+    width: calc(100% - 20px); /* Padding berücksichtigen */
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+}
+.connection-controls select {
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23bdc3c7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 1em;
+    padding-right: 2.5em; /* Platz für Pfeil */
+}
+
+
+.connection-controls button {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 4px;
+    background-color: var(--accent-color);
+    color: white;
+    cursor: pointer;
+    font-size: 1em;
+    margin-bottom: 8px;
+    transition: background-color 0.2s;
+}
+.connection-controls button:hover {
+    background-color: #2980b9;
+}
+.connection-controls button.danger-btn {
+    background-color: var(--error-color);
+}
+.connection-controls button.danger-btn:hover {
+    background-color: #c0392b;
+}
+.connection-controls button:disabled,
+.connection-controls select:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+#userList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+#userList li {
+    padding: 6px 0;
+    font-size: 0.95em;
+    display: flex;
+    align-items: center;
+    word-break: break-all;
+}
+.user-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+    background-color: var(--success-color); /* Default, wird per JS überschrieben */
+    flex-shrink: 0;
+}
+
+
+.chat-area {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--secondary-bg);
+    padding: 0px; /* Wird durch innere Elemente gehandhabt */
+}
+
+.video-chat-area {
+    display: flex;
+    justify-content: space-around;
+    padding: 10px;
+    background-color: #273746;
+    border-bottom: 1px solid var(--border-color);
+    gap: 10px;
+}
+.video-box {
+    flex: 1;
+    min-width: 0; /* Wichtig für Flexbox-Kinder */
+    background-color: #1f2b38;
+    border-radius: 6px;
+    padding: 10px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Zentriert Statuslabel */
+    justify-content: center; /* Zentriert Statuslabel */
+    min-height: 150px; /* Mindesthöhe für Box */
+}
+.video-box h3 {
+    margin: 0 0 8px 0;
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+    text-align: center;
+}
+.video-box video {
+    width: 100%;
+    max-height: 200px; /* Begrenzt Höhe, Aspekt Ratio wird beibehalten */
+    border-radius: 4px;
+    background-color: black;
+    display: block; /* Entfernt unteren Abstand */
+}
+.video-box video.hidden { display: none; }
+
+.screen-status-label {
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-weight: bold;
+    text-align: center;
+    position: absolute; /* Über Video legen, wenn Video nicht hidden */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+.screen-status-label.offline { background-color: var(--error-color); }
+.screen-status-label.loading { background-color: #f39c12; }
+.screen-status-label.hidden { display: none; }
+
+.video-box video:not(.hidden) + .screen-status-label {
+    display: none; /* Status nur anzeigen, wenn Video hidden */
+}
+
+.fullscreen-btn {
+    position: absolute;
+    bottom: 15px; /* Angepasst, um nicht im Text zu sein */
+    right: 15px;
+    padding: 6px 10px;
+    font-size: 0.8em;
+    background-color: rgba(0,0,0,0.5);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.5);
+    border-radius: 4px;
+    cursor: pointer;
+    z-index: 10;
+}
+.fullscreen-btn.hidden { display: none; }
+
+
+.messages-container {
+    flex-grow: 1;
+    padding: 15px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.message {
+    padding: 8px 12px;
+    border-radius: 12px;
+    max-width: 75%;
+    word-wrap: break-word;
+    position: relative; /* Für Timestamp */
+}
+.message .name {
+    font-weight: bold;
+    display: block;
+    font-size: 0.85em;
+    margin-bottom: 3px;
+}
+.message.me {
+    background-color: var(--message-bg-me);
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 3px;
+}
+.message.me .name { color: #eaffff; }
+
+.message:not(.me) {
+    background-color: var(--message-bg-other);
+    color: #2c3e50;
+    align-self: flex-start;
+    border-bottom-left-radius: 3px;
+}
+.message:not(.me) .name { color: #333; }
+
+.message .timestamp {
+    font-size: 0.7em;
+    color: rgba(255,255,255,0.6);
+    position: absolute;
+    bottom: 5px;
+    right: 10px;
+}
+.message.me .timestamp { color: rgba(255,255,255,0.7); }
+.message:not(.me) .timestamp { color: rgba(0,0,0,0.4); }
+
+.file-attachment img {
+    max-width: 200px;
+    max-height: 200px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: block;
+    margin-bottom: 5px;
+}
+.file-attachment span:not(.name) { /* Für Datei-Icon */
+    font-size: 2em;
+    margin-right: 5px;
+}
+.file-attachment a {
+    color: inherit;
+    text-decoration: underline;
+    font-size: 0.9em;
+}
+
+.typing-indicator {
+    padding: 5px 15px;
+    font-style: italic;
+    color: var(--typing-indicator-color);
+    font-size: 0.9em;
+    min-height: 20px; /* Platzhalter, damit Layout nicht springt */
+}
+
+.message-input-area {
+    display: flex;
+    padding: 10px 15px;
+    background-color: var(--primary-bg);
+    border-top: 1px solid var(--border-color);
+    align-items: flex-end; /* Für mehrzeiliges Textarea */
+}
+#messageInput {
+    flex-grow: 1;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    resize: none;
+    overflow-y: auto; /* Erlaubt Scrollen bei max-height */
+    max-height: 100px; /* Begrenzt Höhe des Textarea */
+    font-size: 1em;
+    line-height: 1.4;
+}
+#messageInput:disabled {
+    background-color: #555;
+    opacity: 0.7;
+}
+
+.message-input-area button, .file-upload-label {
+    padding: 10px 15px;
+    margin-left: 10px;
+    border: none;
+    border-radius: 20px;
+    background-color: var(--accent-color);
+    color: white;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.2s;
+}
+.message-input-area button:hover, .file-upload-label:hover {
+    background-color: #2980b9;
+}
+.message-input-area button:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+}
+.file-upload-label {
+    font-size: 1.2em;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.error-message {
+    background-color: var(--error-color);
+    color: white;
+    padding: 10px;
+    text-align: center;
+    border-radius: 4px;
+    margin: 10px 15px 0 15px; /* Angepasst */
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Responsive Anpassungen */
+@media (max-width: 768px) {
+    .app-container {
+        width: 100%;
+        height: 100vh;
+        max-height: none;
+        border-radius: 0;
+    }
+    .main-content {
+        flex-direction: column;
+    }
+    .sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+        max-height: 40vh; /* Begrenzt Höhe im mobilen Layout */
+    }
+    .video-chat-area {
+        flex-direction: column;
+    }
+    .video-box video {
+        max-height: 150px;
+    }
+    .message-input-area {
+        padding: 8px;
+    }
+    #messageInput, .message-input-area button, .file-upload-label {
+        font-size: 0.95em;
+        padding: 8px 12px;
+    }
+}

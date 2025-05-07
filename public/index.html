@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EDMBook Chat</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>EDMBook Echtzeit Chat</h1>
+            <div id="connectionStatus" class="status-indicator disconnected">Getrennt</div>
+        </header>
+
+        <div class="main-content">
+            <aside class="sidebar">
+                <div class="connection-controls">
+                    <h2>Verbindung</h2>
+                    <input type="text" id="usernameInput" placeholder="Benutzername eingeben...">
+                    <select id="micSelect" title="Mikrofon auswählen" disabled>
+                        <option value="">Standard-Mikrofon</option>
+                    </select>
+                    <button id="connectBtn">Verbinden</button>
+                    <button id="disconnectBtn" class="hidden danger-btn">Trennen</button>
+                    <button id="shareScreenBtn" class="hidden">🖥 Bildschirm teilen</button>
+                </div>
+
+                <div class="user-list-container">
+                    <h2>Benutzer Online (<span id="userCount">0</span>)</h2>
+                    <ul id="userList">
+                        </ul>
+                </div>
+            </aside>
+
+            <main class="chat-area">
+                <div id="errorDisplay" class="error-message" style="display: none;"></div>
+
+                <div class="video-chat-area">
+                    <div class="video-box" id="myScreenBox">
+                        <h3>Mein Screen/Audio</h3>
+                        <video id="myVideo" autoplay playsinline muted class="hidden"></video>
+                        <div id="myScreenStatus" class="screen-status-label offline">MEIN BILDSCHIRM OFFLINE</div>
+                        <button class="fullscreen-btn hidden" data-target-box="myScreenBox">Vollbild</button>
+                    </div>
+                    <div class="video-box" id="remoteScreenBox">
+                        <h3>Remote Screen/Audio</h3>
+                        <video id="remoteVideo" autoplay playsinline class="hidden"></video>
+                        <div id="remoteScreenStatus" class="screen-status-label offline">REMOTE BILDSCHIRM OFFLINE</div>
+                        <button class="fullscreen-btn hidden" data-target-box="remoteScreenBox">Vollbild</button>
+                    </div>
+                </div>
+
+                <div id="messagesContainer" class="messages-container">
+                    </div>
+
+                <div id="typingIndicator" class="typing-indicator" style="display: none;"></div>
+
+                <footer class="message-input-area">
+                    <textarea id="messageInput" placeholder="Nachricht eingeben..." rows="1" disabled></textarea>
+                    <label for="fileInput" class="file-upload-label" title="Datei senden (max 5MB)">📎</label>
+                    <input type="file" id="fileInput" accept="image/*,application/pdf,text/*,.zip,.rar" style="display:none;" disabled>
+                    <button id="sendBtn" disabled>Senden</button>
+                </footer>
+            </main>
+        </div>
+    </div>
+
+    <audio id="notifSound" src="notif.mp3" preload="auto"></audio>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
