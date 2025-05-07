@@ -1,8 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const UI = {
-        serverUrlInput: document.getElementById('serverUrl'),
-        roomIdInput: document.getElementById('roomId'),
-        usernameInput: document.getElementById('username'),
+        // serverUrlInput und roomIdInput werden nicht mehr benötigt
+        usernameInput: document.getElementById('usernameInput'),
         connectBtn: document.getElementById('connectBtn'),
         disconnectBtn: document.getElementById('disconnectBtn'),
         shareScreenBtn: document.getElementById('shareScreenBtn'),
@@ -11,25 +10,26 @@ document.addEventListener('DOMContentLoaded', () => {
         messageInput: document.getElementById('messageInput'),
         sendBtn: document.getElementById('sendBtn'),
         typingIndicator: document.getElementById('typingIndicator'),
-        statusIndicator: document.getElementById('statusIndicator'),
-        errorMessage: document.getElementById('errorMessage'),
-        localVideo: document.getElementById('localVideo'),
-        remoteVideo: document.getElementById('remoteVideo'),
-        localScreenStatus: document.getElementById('localScreenStatus'),
-        remoteScreenStatus: document.getElementById('remoteScreenStatus'),
-        localVideoBox: document.getElementById('localVideoBox'),
-        remoteVideoBox: document.getElementById('remoteVideoBox'),
+        statusIndicator: document.getElementById('statusIndicator'), // Korrigierte ID
+        errorMessage: document.getElementById('errorMessage'),       // Korrigierte ID
+        localVideo: document.getElementById('localVideo'),         // Korrigierte ID
+        remoteVideo: document.getElementById('remoteVideo'),       // Korrigierte ID
+        localScreenStatus: document.getElementById('localScreenStatus'), // Korrigierte ID
+        remoteScreenStatus: document.getElementById('remoteScreenStatus'), // Korrigierte ID
+        localVideoBox: document.getElementById('localVideoBox'),     // Korrigierte ID
+        remoteVideoBox: document.getElementById('remoteVideoBox'),   // Korrigierte ID
         fileInput: document.getElementById('fileInput'),
-        fileUploadLabel: document.getElementById('fileUploadLabel'),
-        localVideoFullscreenBtn: document.getElementById('localVideoFullscreenBtn'),
-        remoteVideoFullscreenBtn: document.getElementById('remoteVideoFullscreenBtn'),
+        fileUploadLabel: document.getElementById('fileUploadLabel'),   // Korrigierte ID
+        localVideoFullscreenBtn: document.getElementById('localVideoFullscreenBtn'),   // Korrigierte ID
+        remoteVideoFullscreenBtn: document.getElementById('remoteVideoFullscreenBtn'), // Korrigierte ID
+        micSelect: document.getElementById('micSelect') // Mic Select hinzugefügt, falls benötigt
     };
 
     let socket;
     let state = {
         connected: false,
         username: '',
-        roomId: '',
+        roomId: 'default-room', // Fester Raumname hier gesetzt! Ändere 'default-room' nach Bedarf.
         users: {},
         peerConnection: null,
         localStream: null,
@@ -42,7 +42,8 @@ document.addEventListener('DOMContentLoaded', () => {
         isWindowFocused: true,
         unreadMessages: 0,
         originalTitle: document.title,
-        notificationSound: new Audio('notif.mp3')
+        notificationSound: new Audio('notif.mp3'),
+        currentPCPartnerId: null // Partner-ID merken
     };
 
     const CONFIG = {
@@ -52,11 +53,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
                 // Für robustere Verbindungen in komplexen Netzwerken wären hier TURN-Server nötig.
-                // {
-                //   urls: 'turn:your.turn.server.com:3478',
-                //   username: 'yourUsername',
-                //   credential: 'yourPassword'
-                // }
             ]
         },
         USER_COLORS: ['#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9800', '#ff5722', '#795548'],
@@ -67,75 +63,86 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Initialisierung und UI-Helfer ---
     function initializeUI() {
-        UI.disconnectBtn.disabled = true;
-        UI.shareScreenBtn.disabled = true;
+        UI.disconnectBtn.classList.add('hidden'); // Standardmäßig versteckt
+        UI.shareScreenBtn.classList.add('hidden'); // Standardmäßig versteckt
         UI.sendBtn.disabled = true;
         UI.messageInput.disabled = true;
-        UI.fileUploadLabel.classList.add('hidden'); // Hide initially
+        // UI.fileUploadLabel existiert jetzt und hat die ID
+        if (UI.fileUploadLabel) UI.fileUploadLabel.classList.add('hidden');
         setConnectionStatus('disconnected', 'Nicht verbunden');
         loadStateFromLocalStorage();
-        [UI.localVideoFullscreenBtn, UI.remoteVideoFullscreenBtn].forEach(btn => btn.classList.add('hidden'));
+        // UI.localVideoFullscreenBtn und UI.remoteVideoFullscreenBtn existieren jetzt
+        if(UI.localVideoFullscreenBtn) UI.localVideoFullscreenBtn.classList.add('hidden');
+        if(UI.remoteVideoFullscreenBtn) UI.remoteVideoFullscreenBtn.classList.add('hidden');
+        // Mikrofon-Auswahl initial deaktivieren
+        if (UI.micSelect) UI.micSelect.disabled = false; // Nur vor Verbindung änderbar
     }
 
     function setConnectionStatus(statusClass, text) {
+        if (!UI.statusIndicator) return; // Sicherstellen, dass das Element existiert
         UI.statusIndicator.className = `status-indicator ${statusClass}`;
         UI.statusIndicator.textContent = text;
     }
 
     function displayError(message) {
+        if (!UI.errorMessage) return; // Sicherstellen, dass das Element existiert
         UI.errorMessage.textContent = message;
         UI.errorMessage.classList.remove('hidden');
-        setTimeout(() => UI.errorMessage.classList.add('hidden'), 5000);
+        setTimeout(() => {
+            if (UI.errorMessage) UI.errorMessage.classList.add('hidden');
+        }, 5000);
     }
 
     function updateUIAfterConnect() {
-        UI.connectBtn.disabled = true;
-        UI.disconnectBtn.disabled = false;
-        UI.shareScreenBtn.disabled = false;
+        UI.connectBtn.classList.add('hidden');
+        UI.disconnectBtn.classList.remove('hidden');
+        UI.shareScreenBtn.classList.remove('hidden');
         UI.sendBtn.disabled = false;
         UI.messageInput.disabled = false;
-        UI.fileUploadLabel.classList.remove('hidden');
-        [UI.serverUrlInput, UI.roomIdInput, UI.usernameInput].forEach(el => el.disabled = true);
-        setConnectionStatus('connected', `Verbunden als ${state.username} in Raum ${state.roomId}`);
+        if(UI.fileUploadLabel) UI.fileUploadLabel.classList.remove('hidden');
+        if(UI.usernameInput) UI.usernameInput.disabled = true;
+        if (UI.micSelect) UI.micSelect.disabled = true; // Mic während Verbindung nicht ändern
+        setConnectionStatus('connected', `Verbunden als ${state.username}`); // Raum-ID aus Titel entfernt
         saveStateToLocalStorage();
     }
 
     function updateUIAfterDisconnect() {
-        UI.connectBtn.disabled = false;
-        UI.disconnectBtn.disabled = true;
-        UI.shareScreenBtn.disabled = true;
+        UI.connectBtn.classList.remove('hidden');
+        UI.disconnectBtn.classList.add('hidden');
+        UI.shareScreenBtn.classList.add('hidden');
         UI.sendBtn.disabled = true;
         UI.messageInput.disabled = true;
-        UI.fileUploadLabel.classList.add('hidden');
-        [UI.serverUrlInput, UI.roomIdInput, UI.usernameInput].forEach(el => el.disabled = false);
+        if(UI.fileUploadLabel) UI.fileUploadLabel.classList.add('hidden');
+        if(UI.usernameInput) UI.usernameInput.disabled = false;
+        if (UI.micSelect) UI.micSelect.disabled = false;
         setConnectionStatus('disconnected', 'Nicht verbunden');
         UI.userList.innerHTML = '';
-        UI.messagesContainer.innerHTML = '';
+        // UI.messagesContainer.innerHTML = ''; // Nachrichten nicht unbedingt löschen
         UI.typingIndicator.textContent = '';
         stopLocalStream();
         closePeerConnection();
-        if (state.isSharingScreen) toggleScreenSharing(); // Stop sharing if active
+        if (state.isSharingScreen) { // Reset screen sharing state
+             state.isSharingScreen = false;
+             UI.shareScreenBtn.textContent = 'Bildschirm teilen';
+             UI.shareScreenBtn.classList.remove('danger-btn');
+        }
         state.users = {};
     }
 
     function saveStateToLocalStorage() {
-        localStorage.setItem('chatClientState', JSON.stringify({
-            serverUrl: UI.serverUrlInput.value,
-            roomId: UI.roomIdInput.value,
-            username: UI.usernameInput.value
-        }));
+        // Speichere nur den Benutzernamen, da Server/Raum jetzt fest sind
+        localStorage.setItem('chatClientUsername', UI.usernameInput.value);
     }
 
     function loadStateFromLocalStorage() {
-        const saved = localStorage.getItem('chatClientState');
-        if (saved) {
-            const { serverUrl, roomId, username } = JSON.parse(saved);
-            UI.serverUrlInput.value = serverUrl || 'ws://localhost:3000';
-            UI.roomIdInput.value = roomId || 'default-room';
-            UI.usernameInput.value = username || '';
+        // Lade nur den Benutzernamen
+        const savedUsername = localStorage.getItem('chatClientUsername');
+        if (savedUsername) {
+            UI.usernameInput.value = savedUsername;
         }
+        // ServerUrl und RoomId werden nicht mehr aus LocalStorage geladen
     }
-    
+
     window.addEventListener('focus', () => {
         state.isWindowFocused = true;
         state.unreadMessages = 0;
@@ -168,44 +175,73 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     UI.messageInput.addEventListener('input', () => {
         UI.messageInput.style.height = 'auto';
-        UI.messageInput.style.height = (UI.messageInput.scrollHeight) + 'px';
+        let newHeight = UI.messageInput.scrollHeight;
+        const maxHeight = 100; // Feste max Höhe
+        if (maxHeight && newHeight > maxHeight) newHeight = maxHeight;
+        UI.messageInput.style.height = newHeight + 'px';
     });
     UI.fileInput.addEventListener('change', handleFileSelect);
-    [
-        { btn: UI.localVideoFullscreenBtn, video: UI.localVideo },
-        { btn: UI.remoteVideoFullscreenBtn, video: UI.remoteVideo }
-    ].forEach(item => {
-        if (item.btn) item.btn.addEventListener('click', () => toggleFullscreen(item.video));
+    // Event Listener für Fullscreen Buttons
+    if(UI.localVideoFullscreenBtn) UI.localVideoFullscreenBtn.addEventListener('click', () => toggleFullscreen(UI.localVideo));
+    if(UI.remoteVideoFullscreenBtn) UI.remoteVideoFullscreenBtn.addEventListener('click', () => toggleFullscreen(UI.remoteVideo));
+
+    // Event Listener für Mic Select (optional, für spätere Verwendung)
+    if (UI.micSelect) UI.micSelect.addEventListener('change', async () => {
+        if (state.connected && !state.isSharingScreen) {
+            console.log("Mikrofon geändert, initialisiere Audio neu.");
+            await setupLocalMedia(); // Re-init media mit neuem Mic
+        }
     });
+
+     window.addEventListener('beforeunload', () => {
+        if (socket && socket.connected) {
+            socket.disconnect();
+        }
+    });
+    document.addEventListener('fullscreenchange', () => {
+        [
+            { btn: UI.localVideoFullscreenBtn, video: UI.localVideo },
+            { btn: UI.remoteVideoFullscreenBtn, video: UI.remoteVideo }
+        ].forEach(item => {
+            if(item.btn) {
+                item.btn.textContent = (document.fullscreenElement === item.video) ? "Vollbild verlassen" : "Vollbild";
+            }
+        });
+    });
+
 
     // --- WebSocket Logic ---
     function connect() {
-        const serverUrl = UI.serverUrlInput.value.trim();
-        const roomId = UI.roomIdInput.value.trim();
-        let username = UI.usernameInput.value.trim();
+        // --- START MODIFICATION ---
+        // Werte fest eintragen statt aus UI lesen:
+        const serverUrl = window.location.origin; // Verbindet zum selben Server, von dem die Seite geladen wurde
+        const roomId = state.roomId; // Nutzt den festen Wert aus dem State ('default-room')
 
-        if (!serverUrl || !roomId) {
-            displayError("Server URL und Raum-ID dürfen nicht leer sein.");
-            return;
-        }
+        let username = UI.usernameInput.value.trim(); // Benutzername bleibt Eingabe
+
         if (!username) username = `User${Math.floor(Math.random() * 10000)}`;
-        UI.usernameInput.value = username; // Update UI if username was generated
+        UI.usernameInput.value = username;
 
         state.username = username;
-        state.roomId = roomId;
+        // state.roomId ist bereits im State gesetzt
 
-        socket = io(serverUrl, {
+        console.log(`Verbinde mit ${serverUrl} in Raum ${state.roomId}`); // Log für Debugging
+        // --- END MODIFICATION ---
+
+        socket = io(serverUrl, { // Nutze die ermittelte serverUrl
             auth: { username: state.username, roomId: state.roomId },
-            transports: ['websocket'] // Force WebSocket
+            transports: ['websocket']
         });
         setConnectionStatus('connecting', 'Verbinde...');
 
+        // --- Socket Event Listeners ---
         socket.on('connect', () => {
             state.connected = true;
             updateUIAfterConnect();
-            console.log('Verbunden mit Server');
-            socket.emit('joinRoom', { username: state.username, roomId: state.roomId });
-            setupLocalMedia(); // Start local media after successful connection
+            console.log('Verbunden mit Server, ID:', socket.id);
+            // Server sollte jetzt 'joinSuccess' oder 'userListUpdate' senden
+            // Kein explizites 'joinRoom' mehr hier, Server managed das bei connect mit auth
+            setupLocalMedia();
         });
 
         socket.on('connect_error', (err) => {
@@ -217,74 +253,80 @@ document.addEventListener('DOMContentLoaded', () => {
         socket.on('disconnect', (reason) => {
             state.connected = false;
             displayError(`Verbindung getrennt: ${reason}`);
-            updateUIAfterDisconnect();
+            updateUIAfterDisconnect(); // UI zurücksetzen
         });
 
-        socket.on('roomUsers', (users) => {
-            state.users = users;
-            updateUserList();
-            // Initiate calls if more than one user and not already connected
-            const otherUsers = Object.keys(users).filter(id => id !== socket.id);
-            if (otherUsers.length > 0 && !state.peerConnection) {
-                 // We will wait for an offer or create one if we are the 'initiator' (e.g. by alphabetical order of socket.id)
-                 // For simplicity, let's say the one who joins later or has a "greater" ID initiates an offer.
-                 // This logic can be more robust, e.g. server designating an initiator.
-                 // For now, if there's another user, let's try to establish connection by sending an offer.
-                 // This might lead to multiple offers if not coordinated.
-                 // A better way: Server signals who should initiate.
-                 // Or: Only one designated "caller" per pair based on IDs.
-            }
-        });
-        
-        socket.on('userJoined', ({ id, username }) => {
-            state.users[id] = { username, color: getRandomColor(id) };
-            updateUserList();
-            appendSystemMessage(`${username} ist dem Raum beigetreten.`);
-            // If we are the only other person, or by some defined logic, create an offer
-            // This part needs careful consideration to avoid offer collisions
-            if (Object.keys(state.users).length === 2 && !state.peerConnection) { // Simplified: if now 2 users, try to call.
-                 console.log("Anderer Benutzer beigetreten, versuche Anruf zu starten.");
-                 createOffer(Object.keys(state.users).find(uid => uid !== socket.id));
-            }
-        });
+        // Server sollte 'joinSuccess' senden oder direkt 'userListUpdate'
+         socket.on('joinSuccess', async ({ users: currentUsers, id: myId }) => {
+             console.log("Join erfolgreich. Meine ID:", myId, "Benutzer:", currentUsers);
+             // state.connected und updateUIAfterConnect sollten schon in 'connect' passiert sein
+             state.socketId = myId; // Eigene ID speichern, falls benötigt
+             updateUserList(currentUsers); // Initialisiere User Liste
 
-        socket.on('userLeft', ({ id, username }) => {
-            appendSystemMessage(`${username} hat den Raum verlassen.`);
-            if (state.users[id] && state.users[id].peerConnection === state.peerConnection) {
-                closePeerConnection(); // Close PC if the disconnected user was our peer
-            }
-            delete state.users[id];
-            updateUserList();
-            if (Object.keys(state.users).filter(uid => uid !== socket.id).length === 0) {
-                // If no other users left, clean up remote video
-                updateVideoDisplay(UI.remoteVideo, UI.remoteScreenStatus, null);
-            }
-        });
+             // Initialisiere P2P nur, wenn andere User da sind
+             initiateP2PConnection();
+         });
+
+         socket.on('joinError', ({ message }) => {
+             displayError(message);
+             if (socket) socket.disconnect(); // Trennen bei Fehler
+         });
+
+         socket.on('userListUpdate', (currentUsersList) => {
+             console.log("Benutzerliste aktualisiert:", currentUsersList);
+             const oldPartnerStillPresent = state.currentPCPartnerId && currentUsersList.some(u => u.id === state.currentPCPartnerId);
+
+             // Systemnachrichten für Join/Leave (optional) -> diese Logik kann vereinfacht oder entfernt werden
+
+             updateUserList(currentUsersList); // Aktualisiere Anzeige
+
+             // P2P Logik anpassen
+             if (!oldPartnerStillPresent && state.currentPCPartnerId) {
+                  console.log("P2P Partner hat Chat verlassen. Schließe Verbindung.");
+                  closePeerConnection();
+             }
+             // Versuche neue P2P Verbindung, wenn keine besteht oder Partner weg ist und andere da sind
+             if (!state.currentPCPartnerId && currentUsersList.some(u => u.id !== socket?.id)) {
+                 initiateP2PConnection();
+             }
+         });
 
         socket.on('chatMessage', (message) => {
             appendMessage(message);
             notifyUnreadMessage();
         });
+         socket.on('file', (fileMsgData) => { // Datei-Event vom Server (aus server.js)
+             appendMessage({ ...fileMsgData, type: 'file' });
+             if (fileMsgData.username !== state.username && state.isConnected && document.hidden === false) notifyUnreadMessage();
+         });
+
 
         socket.on('typing', ({ username, isTyping }) => {
+            if (username === state.username) return; // Eigene Tipp-Anzeige ignorieren
+            const typingUsernames = state.typingUsers || (state.typingUsers = new Set()); // Sicherstellen, dass Set existiert
             if (isTyping) {
-                UI.typingIndicator.textContent = `${username} tippt...`;
+                typingUsernames.add(username);
             } else {
-                UI.typingIndicator.textContent = '';
+                typingUsernames.delete(username);
             }
+            updateTypingIndicatorDisplay(); // Funktion zum Anzeigen aufrufen
         });
 
-        // WebRTC Signaling
-        socket.on('webRTC-offer', async ({ from, offer }) => {
+
+        // WebRTC Signaling Listener bleiben gleich...
+         socket.on('webRTC-offer', async ({ from, offer }) => {
             console.log('Angebot erhalten von:', from);
-            if (state.peerConnection) { // If connection exists, it might be a re-negotiation
-                console.warn("Bestehende PeerConnection beim Empfangen eines neuen Angebots. Vorsicht bei der Handhabung.");
+             if (state.peerConnection) {
+                console.warn("Bestehende PeerConnection beim Empfangen eines neuen Angebots.");
+                // Ggf. alte schließen oder Logik für Re-Negotiation verbessern
+                closePeerConnection();
             }
-            await createPeerConnection(from); // Pass 'from' to store as current peer
+            await createPeerConnection(from);
             await state.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            if(!state.localStream) await setupLocalMedia(); // Stelle sicher, dass lokale Medien bereit sind
             const answer = await state.peerConnection.createAnswer();
             await state.peerConnection.setLocalDescription(answer);
-            socket.emit('webRTC-answer', { to: from, answer });
+            socket.emit('webRTC-answer', { to: from, answer: state.peerConnection.localDescription });
             console.log('Antwort gesendet an:', from);
         });
 
@@ -293,130 +335,123 @@ document.addEventListener('DOMContentLoaded', () => {
             if (state.peerConnection && state.peerConnection.signalingState !== "stable") {
                  await state.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
             } else {
-                console.warn("Antwort erhalten, aber PeerConnection nicht im erwarteten Zustand oder nicht vorhanden.");
+                console.warn("Antwort erhalten, aber PeerConnection nicht im erwarteten Zustand.");
             }
         });
 
         socket.on('webRTC-ice-candidate', async ({ from, candidate }) => {
-            console.log('ICE Kandidat erhalten von:', from);
-            if (state.peerConnection) {
+            // console.log('ICE Kandidat erhalten von:', from);
+            if (state.peerConnection && state.peerConnection.remoteDescription) { // Kandidaten erst nach setRemoteDescription hinzufügen
                 try {
                     await state.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
                 } catch (e) {
                     console.error('Fehler beim Hinzufügen des ICE Kandidaten:', e);
                 }
             } else {
-                 console.warn("ICE Kandidat erhalten, aber keine PeerConnection vorhanden.");
+                 console.warn("ICE Kandidat erhalten, aber PeerConnection nicht bereit.");
             }
         });
-    }
+    } // Ende der connect Funktion
+
 
     function disconnect() {
         if (socket) {
-            socket.disconnect();
+            socket.disconnect(); // Löst den 'disconnect' Event Listener aus
+        } else {
+             updateUIAfterDisconnect(); // Falls Socket nie erstellt wurde
         }
-        updateUIAfterDisconnect(); // Ensure UI is reset
     }
 
     // --- Chat Logic ---
     function sendMessage() {
         const content = UI.messageInput.value.trim();
-        if (!content && !state.selectedFile) {
-            return;
-        }
+        if (!content && !state.selectedFile) return;
+        if (!socket || !state.connected) return;
 
-        const message = {
-            username: state.username,
+        const messageBase = {
+            // username und color werden vom Server hinzugefügt
             content: content,
             timestamp: new Date().toISOString(),
-            type: 'text'
         };
 
         if (state.selectedFile) {
-            message.type = 'file';
-            message.file = {
-                name: state.selectedFile.name,
-                type: state.selectedFile.type,
-                size: state.selectedFile.size
+            const message = {
+                ...messageBase,
+                type: 'file',
+                file: {
+                    name: state.selectedFile.name,
+                    type: state.selectedFile.type,
+                    size: state.selectedFile.size
+                }
             };
-            // For actual file transfer, you'd typically upload to a server or use WebRTC DataChannels.
-            // Here, we're just sending file metadata and a data URL for images.
             if (state.selectedFile.type.startsWith('image/')) {
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    message.file.dataUrl = e.target.result;
-                    socket.emit('chatMessage', message);
+                    message.file.dataUrl = e.target.result; // Base64 für Vorschau
+                    socket.emit('file', message); // An Server senden
                     resetFileInput();
                 };
                 reader.readAsDataURL(state.selectedFile);
-            } else { // Not an image, just send metadata
-                socket.emit('chatMessage', message);
+            } else { // Nur Metadaten für andere Dateien senden
+                socket.emit('file', message);
                 resetFileInput();
             }
         } else {
-            socket.emit('chatMessage', message);
+            const message = { ...messageBase, type: 'text' };
+            socket.emit('message', message); // An Server senden
         }
 
         UI.messageInput.value = '';
         UI.messageInput.style.height = 'auto';
         UI.messageInput.focus();
-        sendTyping(false); // Stop typing indicator
+        sendTyping(false);
     }
 
-    function appendMessage(msg) {
+    function appendMessage(msg) { // Wird vom Server-Broadcast aufgerufen
         const msgDiv = document.createElement('div');
         msgDiv.classList.add('message');
-        if (msg.username === state.username) {
-            msgDiv.classList.add('me');
-        }
+        const isMe = msg.username === state.username;
+        if (isMe) msgDiv.classList.add('me');
 
         const nameSpan = document.createElement('span');
         nameSpan.classList.add('name');
-        nameSpan.textContent = msg.username;
-        nameSpan.style.color = state.users[msg.socketId]?.color || getUserColor(msg.username);
-
+        nameSpan.textContent = escapeHTML(msg.username);
+        // Farbe aus msg.color verwenden, die der Server mitsendet
+        nameSpan.style.color = escapeHTML(msg.color || getUserColor(msg.username));
 
         const contentDiv = document.createElement('div');
         contentDiv.classList.add('content');
 
         if (msg.type === 'file' && msg.file) {
-            const fileInfo = document.createElement('div');
-fileInfo.classList.add('file-attachment');
-            if (msg.file.dataUrl && msg.file.type.startsWith('image/')) {
-                const img = document.createElement('img');
-                img.src = msg.file.dataUrl;
-                img.alt = msg.file.name;
-                img.style.maxWidth = `${CONFIG.IMAGE_PREVIEW_MAX_WIDTH}px`;
-                img.style.maxHeight = `${CONFIG.IMAGE_PREVIEW_MAX_HEIGHT}px`;
-                img.onclick = () => openImageModal(img.src); // Simple modal for viewing
-                fileInfo.appendChild(img);
-            } else {
-                const icon = document.createElement('span');
-                icon.textContent = '📄'; // Generic file icon
-                fileInfo.appendChild(icon);
-            }
-            const link = document.createElement('a');
-            link.textContent = `${msg.file.name} (${formatFileSize(msg.file.size)})`;
-            if (msg.file.dataUrl) { // If it's an image with dataUrl, allow download
-                link.href = msg.file.dataUrl;
-                link.download = msg.file.name;
-            } else {
-                link.title = "Direkter Download nicht verfügbar für diesen Dateityp in der Demo.";
-                link.style.cursor = "default";
-                link.onclick = (e) => e.preventDefault();
-            }
-            fileInfo.appendChild(link);
-            if (msg.content) { // If there was text along with the file
-                const textContent = document.createElement('p');
-                textContent.textContent = msg.content;
-                fileInfo.appendChild(textContent);
-            }
-            contentDiv.appendChild(fileInfo);
+             const fileInfo = document.createElement('div');
+             fileInfo.classList.add('file-attachment');
+             if (msg.file.dataUrl && msg.file.type.startsWith('image/')) {
+                 const img = document.createElement('img');
+                 img.src = msg.file.dataUrl; // Direkt Base64 verwenden
+                 img.alt = escapeHTML(msg.file.name);
+                 img.style.maxWidth = `${CONFIG.IMAGE_PREVIEW_MAX_WIDTH}px`;
+                 img.style.maxHeight = `${CONFIG.IMAGE_PREVIEW_MAX_HEIGHT}px`;
+                 img.onclick = () => openImageModal(img.src);
+                 fileInfo.appendChild(img);
+             } else {
+                 fileInfo.innerHTML += `<span style="font-size: 1.5em;">📄</span>`; // Datei-Icon
+             }
+             const linkText = `${escapeHTML(msg.file.name)} (${formatFileSize(msg.file.size)})`;
+             if (msg.file.dataUrl) { // Download-Link für Bilder
+                 fileInfo.innerHTML += ` <a href="${msg.file.dataUrl}" download="${escapeHTML(msg.file.name)}">${linkText}</a>`;
+             } else {
+                 fileInfo.innerHTML += ` <span>${linkText} (Kein direkter Download)</span>`;
+             }
+              if (msg.content) { // Text mit Datei anzeigen
+                 const textNode = document.createElement('p');
+                 textNode.textContent = escapeHTML(msg.content);
+                 fileInfo.appendChild(textNode);
+             }
+             contentDiv.appendChild(fileInfo);
 
-        } else { // Regular text message
-            contentDiv.textContent = msg.content;
+        } else { // Normale Textnachricht
+            contentDiv.textContent = escapeHTML(msg.content || ''); // Sicherstellen, dass content existiert
         }
-
 
         const timeSpan = document.createElement('span');
         timeSpan.classList.add('timestamp');
@@ -426,45 +461,32 @@ fileInfo.classList.add('file-attachment');
         msgDiv.appendChild(contentDiv);
         msgDiv.appendChild(timeSpan);
         UI.messagesContainer.appendChild(msgDiv);
-        
+
         // Scroll logic
-        const isScrolledToBottom = UI.messagesContainer.scrollHeight - UI.messagesContainer.clientHeight <= UI.messagesContainer.scrollTop + 1;
-        if (msg.username === state.username || isScrolledToBottom || state.lastMessageTimestamp === 0) {
+        const isScrolledToBottom = UI.messagesContainer.scrollHeight - UI.messagesContainer.clientHeight <= UI.messagesContainer.scrollTop + 10; // Toleranz erhöht
+        if (isMe || isScrolledToBottom || state.lastMessageTimestamp === 0) {
              UI.messagesContainer.scrollTop = UI.messagesContainer.scrollHeight;
         }
         state.lastMessageTimestamp = Date.now();
     }
-    
+
     function openImageModal(src) {
-        // Basic modal:
         const modal = document.createElement('div');
-        modal.style.position = 'fixed';
-        modal.style.left = '0';
-        modal.style.top = '0';
-        modal.style.width = '100%';
-        modal.style.height = '100%';
-        modal.style.backgroundColor = 'rgba(0,0,0,0.8)';
-        modal.style.display = 'flex';
-        modal.style.justifyContent = 'center';
-        modal.style.alignItems = 'center';
-        modal.style.zIndex = '1000';
+        modal.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.8);display:flex;justify-content:center;align-items:center;z-index:1000;cursor:pointer;';
         modal.onclick = () => modal.remove();
 
         const img = document.createElement('img');
         img.src = src;
-        img.style.maxWidth = '90%';
-        img.style.maxHeight = '90%';
-        img.style.objectFit = 'contain';
-        
+        img.style.cssText = 'max-width:90%;max-height:90%;object-fit:contain;';
+
         modal.appendChild(img);
         document.body.appendChild(modal);
     }
 
-
     function appendSystemMessage(text) {
         const msgDiv = document.createElement('div');
-        msgDiv.classList.add('message', 'system');
-        msgDiv.textContent = text;
+        msgDiv.classList.add('message', 'system'); // Eigene Klasse für Systemnachrichten
+        msgDiv.textContent = escapeHTML(text);
         UI.messagesContainer.appendChild(msgDiv);
         UI.messagesContainer.scrollTop = UI.messagesContainer.scrollHeight;
     }
@@ -472,87 +494,96 @@ fileInfo.classList.add('file-attachment');
     function sendTyping(isTyping = true) {
         if (!socket || !state.connected) return;
         clearTimeout(state.typingTimeout);
-        socket.emit('typing', { username: state.username, isTyping });
+        socket.emit('typing', { isTyping }); // Server kennt Absender
         if (isTyping) {
             state.typingTimeout = setTimeout(() => {
-                socket.emit('typing', { username: state.username, isTyping: false });
+                socket.emit('typing', { isTyping: false });
             }, CONFIG.TYPING_TIMER_LENGTH);
         }
     }
 
-    function updateUserList() {
+     function updateTypingIndicatorDisplay() {
+        if (!UI.typingIndicator) return;
+        const typingUsernames = state.typingUsers;
+        if (typingUsernames && typingUsernames.size > 0) {
+            const usersString = Array.from(typingUsernames).map(escapeHTML).join(', ');
+            UI.typingIndicator.textContent = `${usersString} schreibt...`;
+            UI.typingIndicator.style.display = 'block';
+        } else {
+            UI.typingIndicator.style.display = 'none';
+        }
+    }
+
+
+    function updateUserList(usersArray) { // Nimmt Array vom Server entgegen
+        state.allUsersList = usersArray; // Speichere die komplette Liste (inkl. Self)
         UI.userList.innerHTML = '';
-        Object.entries(state.users).forEach(([id, user]) => {
+        const userCountElement = document.getElementById('userCountPlaceholder');
+        if(userCountElement) userCountElement.textContent = usersArray.length;
+
+        usersArray.forEach(user => {
             const li = document.createElement('li');
             const dot = document.createElement('span');
-            dot.classList.add('user-dot');
-            dot.style.backgroundColor = user.color || getRandomColor(id);
+            dot.className = 'user-dot';
+            dot.style.backgroundColor = escapeHTML(user.color || getUserColor(user.id)); // Farbe vom Server oder generiert
             li.appendChild(dot);
-            const name = document.createTextNode(user.username + (id === socket.id ? ' (Du)' : ''));
-            if (id === socket.id) {
-                const strong = document.createElement('strong');
-                strong.appendChild(name);
-                li.appendChild(strong);
+            const nameNode = document.createTextNode(` ${escapeHTML(user.username)}`);
+
+            if (user.id === socket?.id) { // Prüfe gegen aktuelle Socket-ID
+                 const strong = document.createElement('strong');
+                 strong.appendChild(nameNode);
+                 strong.appendChild(document.createTextNode(" (Du)"));
+                 li.appendChild(strong);
             } else {
-                li.appendChild(name);
+                li.appendChild(nameNode);
             }
             UI.userList.appendChild(li);
         });
     }
-    
-    function getUserColor(userIdOrName) {
+
+    function getUserColor(userIdOrName) { // Konsistente Farbe basierend auf ID/Name
         let hash = 0;
-        for (let i = 0; i < userIdOrName.length; i++) {
-            hash = userIdOrName.charCodeAt(i) + ((hash << 5) - hash);
+        const str = String(userIdOrName); // Sicherstellen, dass es ein String ist
+        for (let i = 0; i < str.length; i++) {
+            hash = str.charCodeAt(i) + ((hash << 5) - hash);
         }
         return CONFIG.USER_COLORS[Math.abs(hash) % CONFIG.USER_COLORS.length];
     }
-    function getRandomColor(id) { // Ensure users get consistent color
-        return getUserColor(id);
-    }
-
 
     // --- WebRTC Logic ---
     async function setupLocalMedia() {
+        if (state.localStream) { // Stoppe alten Stream, bevor neuer geholt wird
+            state.localStream.getTracks().forEach(track => track.stop());
+        }
         try {
-            // Nur Audio anfordern, Kamera später optional
-            state.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            state.localStream = await navigator.mediaDevices.getUserMedia({
+                 video: { width: { ideal: 640 }, height: { ideal: 480 } }, // Kleinere Auflösung für Performance
+                 audio: { echoCancellation: true, noiseSuppression: true }
+             });
             updateVideoDisplay(UI.localVideo, UI.localScreenStatus, state.localStream, true);
-            UI.localVideoFullscreenBtn.classList.remove('hidden');
-            // If a peerConnection already exists (e.g., due to re-negotiation or joining late), add tracks.
+            if(UI.localVideoFullscreenBtn) UI.localVideoFullscreenBtn.classList.remove('hidden');
+
+            // Füge Tracks zur bestehenden PeerConnection hinzu, falls vorhanden
             if (state.peerConnection) {
                 state.localStream.getTracks().forEach(track => {
-                    try {
-                        state.peerConnection.addTrack(track, state.localStream);
-                    } catch (e) {
-                        console.warn("Fehler beim Hinzufügen des Tracks (möglicherweise bereits hinzugefügt):", e);
+                    const sender = state.peerConnection.getSenders().find(s => s.track?.kind === track.kind);
+                    if (sender) {
+                        sender.replaceTrack(track).catch(e => console.error("Fehler beim Ersetzen des Tracks:", e));
+                    } else {
+                         try { state.peerConnection.addTrack(track, state.localStream); } catch(e) {console.warn("Fehler beim Hinzufügen des Tracks", e)}
                     }
                 });
+                 // Nach dem Hinzufügen von Tracks könnte eine Neuverhandlung nötig sein
+                 // renegotiateIfNeeded(); // (Vorsicht mit automatischen Triggern)
             }
+            return true; // Erfolg
         } catch (err) {
             console.error('Fehler beim Zugriff auf lokale Medien:', err);
-            displayError('Zugriff auf Kamera/Mikrofon fehlgeschlagen. Bitte Berechtigungen prüfen.');
-            updateVideoDisplay(UI.localVideo, UI.localScreenStatus, null, true); // Show error/offline status
+            displayError('Zugriff auf Kamera/Mikrofon fehlgeschlagen. Berechtigungen prüfen.');
+            updateVideoDisplay(UI.localVideo, UI.localScreenStatus, null, true);
+            return false; // Misserfolg
         }
     }
-    
-    function updateVideoDisplay(videoElement, statusElement, stream, isLocal = false) {
-        if (stream) {
-            videoElement.srcObject = stream;
-            videoElement.classList.remove('hidden');
-            statusElement.classList.add('hidden');
-            if (isLocal) UI.localVideoFullscreenBtn.classList.remove('hidden');
-            else UI.remoteVideoFullscreenBtn.classList.remove('hidden');
-        } else {
-            videoElement.srcObject = null;
-            videoElement.classList.add('hidden');
-            statusElement.textContent = isLocal ? 'Kamera aus / Fehler' : 'Kein Video/Screen';
-            statusElement.className = 'screen-status-label offline'; // keep 'offline' visible
-            if (isLocal) UI.localVideoFullscreenBtn.classList.add('hidden');
-            else UI.remoteVideoFullscreenBtn.classList.add('hidden');
-        }
-    }
-
 
     function stopLocalStream() {
         if (state.localStream) {
@@ -560,22 +591,19 @@ fileInfo.classList.add('file-attachment');
             state.localStream = null;
             updateVideoDisplay(UI.localVideo, UI.localScreenStatus, null, true);
         }
-        if (state.screenStream) { // Also stop screen stream if it was part of local media conceptually
+        if (state.screenStream) {
             state.screenStream.getTracks().forEach(track => track.stop());
             state.screenStream = null;
-            // UI update for screen share button handled in toggleScreenSharing
+            // Screen sharing UI wird in toggleScreenSharing zurückgesetzt
         }
     }
 
     async function createPeerConnection(peerId) {
-        // Close any existing connection for this peer or in general if it's a 1-to-1 call scenario
-        if (state.peerConnection) {
-            console.log("Schließe bestehende PeerConnection, bevor eine neue erstellt wird.");
-            closePeerConnection();
-        }
+        if (state.peerConnection) closePeerConnection();
 
         state.peerConnection = new RTCPeerConnection(CONFIG.RTC_CONFIGURATION);
-        state.users[peerId] = { ...state.users[peerId], peerConnection: state.peerConnection }; // Associate PC with user
+        state.currentPCPartnerId = peerId; // Partner merken
+        console.log("PeerConnection erstellt für Partner:", peerId);
 
         state.peerConnection.onicecandidate = event => {
             if (event.candidate && socket && state.connected) {
@@ -584,186 +612,208 @@ fileInfo.classList.add('file-attachment');
         };
 
         state.peerConnection.ontrack = event => {
-            console.log("Remote Track empfangen:", event.track.kind, "Stream ID:", event.streams[0].id);
-            state.remoteStream = event.streams[0];
-            updateVideoDisplay(UI.remoteVideo, UI.remoteScreenStatus, state.remoteStream);
-        };
-        
-        state.peerConnection.oniceconnectionstatechange = () => {
-            if (!state.peerConnection) return;
-            console.log("ICE Connection Status:", state.peerConnection.iceConnectionState);
-            switch(state.peerConnection.iceConnectionState) {
-                case "connected":
-                    setConnectionStatus('connected', `Video verbunden mit ${state.users[peerId]?.username || 'Peer'}`);
-                    break;
-                case "disconnected":
-                case "failed":
-                case "closed":
-                    // Could attempt to restart ICE or close connection if persistently failed
-                    // For now, just update UI and potentially close
-                    displayError(`Video-Verbindung zu ${state.users[peerId]?.username || 'Peer'} ${state.peerConnection.iceConnectionState}.`);
-                    closePeerConnection(); // Or more specifically for this peer if multi-peer
-                    break;
-            }
-        };
-        
-        state.peerConnection.onnegotiationneeded = async () => {
-            console.log("Neuverhandlung benötigt (onnegotiationneeded).");
-            // This can happen if tracks are added/removed after initial connection.
-            // Avoid offer loops by checking signaling state or using a flag.
-            if (state.peerConnection.signalingState === "stable") { // Only create offer if stable
-                try {
-                    console.log("Erzeuge Angebot wegen Neuverhandlung...");
-                    const offer = await state.peerConnection.createOffer();
-                    await state.peerConnection.setLocalDescription(offer);
-                    socket.emit('webRTC-offer', { to: peerId, offer: state.peerConnection.localDescription });
-                } catch (err) {
-                    console.error("Fehler bei Neuverhandlung (Angebot erstellen):", err);
-                }
+            console.log("Remote Track empfangen:", event.track.kind);
+            if (event.streams && event.streams[0]) {
+                state.remoteStream = event.streams[0];
+                 updateVideoDisplay(UI.remoteVideo, UI.remoteScreenStatus, state.remoteStream);
             } else {
-                console.log("Neuverhandlung benötigt, aber Signalisierungsstatus ist nicht 'stable'. Überspringe Angebotserstellung.", state.peerConnection.signalingState);
+                 // Manchmal wird track ohne stream geliefert, baue stream manuell
+                 if (!state.remoteStream) state.remoteStream = new MediaStream();
+                 state.remoteStream.addTrack(event.track);
+                 updateVideoDisplay(UI.remoteVideo, UI.remoteScreenStatus, state.remoteStream);
             }
         };
 
+        state.peerConnection.oniceconnectionstatechange = () => {
+             if (!state.peerConnection) return;
+             console.log("ICE Connection Status:", state.peerConnection.iceConnectionState);
+             const partnerUsername = state.allUsersList.find(u => u.id === state.currentPCPartnerId)?.username || 'Peer';
+             switch(state.peerConnection.iceConnectionState) {
+                 case "checking":
+                     UI.remoteScreenStatus.textContent = "VERBINDE...";
+                     UI.remoteScreenStatus.className = 'screen-status-label loading';
+                     UI.remoteScreenStatus.classList.remove('hidden');
+                     UI.remoteVideo.classList.add('hidden');
+                     break;
+                 case "connected": // Fall through
+                 case "completed":
+                     // UI wird durch ontrack aktualisiert
+                     setConnectionStatus('connected', `Video verbunden mit ${partnerUsername}`);
+                     break;
+                 case "disconnected":
+                 case "failed":
+                 case "closed":
+                     displayError(`Video-Verbindung zu ${partnerUsername} ${state.peerConnection.iceConnectionState}.`);
+                     closePeerConnection();
+                     // Versuche ggf. neu zu verbinden
+                     initiateP2PConnection();
+                     break;
+             }
+         };
 
-        // Add existing local tracks (camera/mic) if available
+         state.peerConnection.onnegotiationneeded = async () => {
+             console.log("Neuverhandlung benötigt.");
+             // Implementiere Logik, um Offer-Loops zu vermeiden (z.B. Rollenbasierte Initiierung)
+             // Hier nur einfaches Logging oder manueller Trigger
+             // await renegotiateIfNeeded(); // Vorsicht mit automatischem Aufruf
+         };
+
+        // Lokale Tracks hinzufügen
         if (state.localStream) {
             state.localStream.getTracks().forEach(track => {
-                try {
-                    state.peerConnection.addTrack(track, state.localStream);
-                } catch (e) { console.warn("Track bereits hinzugefügt beim Erstellen der PeerConnection:", e); }
+                try { state.peerConnection.addTrack(track, state.localStream); } catch(e){}
             });
         }
-        // Add screen sharing tracks if active
         if (state.isSharingScreen && state.screenStream) {
-            state.screenStream.getTracks().forEach(track => {
-                try {
-                    state.peerConnection.addTrack(track, state.screenStream);
-                } catch (e) { console.warn("Screen-Track bereits hinzugefügt:", e); }
-            });
-        }
-        return state.peerConnection;
+             state.screenStream.getTracks().forEach(track => {
+                 try { state.peerConnection.addTrack(track, state.screenStream); } catch(e){}
+             });
+         }
+         return state.peerConnection;
     }
 
-    async function createOffer(peerId) {
-        if (!socket || !state.connected) {
-            console.warn("Socket nicht verbunden. Kann kein Angebot erstellen.");
-            return;
-        }
-        if (!peerId) {
-            console.warn("Keine Peer-ID zum Senden des Angebots.");
-            return;
-        }
-        
-        // Ensure local media is set up before creating offer
-        if (!state.localStream) {
-            console.log("Lokale Medien werden eingerichtet, bevor ein Angebot erstellt wird...");
-            await setupLocalMedia();
-            if (!state.localStream) { // Check again if setup failed
-                displayError("Lokale Medien konnten nicht eingerichtet werden. Angebot nicht erstellt.");
-                return;
-            }
-        }
-
-        console.log("Erstelle PeerConnection und Angebot für Peer:", peerId);
-        const pc = await createPeerConnection(peerId);
-        if (!pc) {
-            console.error("PeerConnection konnte nicht erstellt werden.");
-            return;
-        }
-
-        try {
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            socket.emit('webRTC-offer', { to: peerId, offer: pc.localDescription });
-            console.log('Angebot gesendet an:', peerId);
-        } catch (err) {
-            console.error('Fehler beim Erstellen des Angebots:', err);
-            displayError("Fehler beim Starten des Videoanrufs.");
-        }
-    }
+     async function renegotiateIfNeeded() { // Aufruf nach Track Änderungen
+         if (!state.peerConnection || !state.currentPCPartnerId || state.peerConnection.signalingState !== 'stable') {
+             console.log("Überspringe Neuverhandlung (Bedingungen nicht erfüllt)");
+             return;
+         }
+         console.log("Neuverhandlung wird initiiert...");
+         try {
+             const offer = await state.peerConnection.createOffer();
+             await state.peerConnection.setLocalDescription(offer);
+             socket.emit('webRTC-offer', { to: state.currentPCPartnerId, offer: state.peerConnection.localDescription });
+             console.log('Neuverhandlungs-Angebot gesendet an:', state.currentPCPartnerId);
+         } catch (err) {
+             console.error('Fehler bei Neuverhandlung:', err);
+         }
+     }
 
     function closePeerConnection() {
         if (state.peerConnection) {
-            state.peerConnection.getSenders().forEach(sender => {
-                if (sender.track) sender.track.stop(); // Stop tracks sent by this PC
-            });
-            state.peerConnection.onicecandidate = null;
-            state.peerConnection.ontrack = null;
-            state.peerConnection.oniceconnectionstatechange = null;
-            state.peerConnection.onnegotiationneeded = null;
-            state.peerConnection.close();
+            console.log("Schließe PeerConnection mit:", state.currentPCPartnerId);
+            state.peerConnection.close(); // Triggert auch oniceconnectionstatechange zu 'closed'
             state.peerConnection = null;
-            console.log('PeerConnection geschlossen.');
         }
+        state.currentPCPartnerId = null;
         state.remoteStream = null;
         updateVideoDisplay(UI.remoteVideo, UI.remoteScreenStatus, null);
     }
 
+     function initiateP2PConnection() { // Wird aufgerufen bei connect/userlistUpdate
+         if (!state.isConnected || !socket) return;
+
+         const otherUsers = state.allUsersList.filter(u => u.id !== socket.id);
+         if (otherUsers.length === 0) { // Keine anderen User da
+             if(state.peerConnection) closePeerConnection();
+             return;
+         }
+
+         // Wenn schon verbunden und Partner noch da ist -> nichts tun
+         if (state.currentPCPartnerId && otherUsers.some(u => u.id === state.currentPCPartnerId)) {
+             return;
+         }
+
+         // Wenn Verbindung weg oder Partner weg -> neue aufbauen
+         if (state.peerConnection) closePeerConnection();
+
+         // Logik zur Auswahl des Partners (hier: der erste Andere)
+         // Eine bessere Logik könnte IDs vergleichen, um nur einen Initiator zu haben
+         const targetUser = otherUsers[0];
+         const shouldInitiate = true; // Vereinfacht: Wir initiieren immer, wenn wir verbinden/Partner weg ist
+                                      // Besser: Logik basierend auf IDs (z.B. ID A < ID B -> A initiiert)
+
+         if (shouldInitiate) {
+             console.log("Initiiere P2P mit:", targetUser.username);
+             // Stelle sicher, dass Medien bereit sind, BEVOR createOffer gerufen wird
+             setupLocalMedia().then(success => {
+                 if (success) {
+                     createPeerConnection(targetUser.id).then(() => {
+                         renegotiateIfNeeded(); // Jetzt Offer senden
+                     });
+                 } else {
+                     displayError("Lokale Medien nicht verfügbar, Anruf kann nicht initiiert werden.");
+                 }
+             });
+         }
+     }
+
+
     async function toggleScreenSharing() {
         if (!state.connected) return;
+        UI.shareScreenBtn.disabled = true; // Button deaktivieren während Umschaltung
 
         if (state.isSharingScreen) {
-            // Stop screen sharing
-            state.screenStream.getTracks().forEach(track => {
-                track.stop();
-                if (state.peerConnection) {
-                    const sender = state.peerConnection.getSenders().find(s => s.track === track);
-                    if (sender) state.peerConnection.removeTrack(sender);
-                }
-            });
-            state.screenStream = null;
-            state.isSharingScreen = false;
-            UI.shareScreenBtn.textContent = 'Bildschirm teilen';
-            UI.shareScreenBtn.classList.remove('danger-btn');
-            
-            // Restore camera feed if it was active
-            if (state.localStream && state.peerConnection) {
-                 state.localStream.getTracks().forEach(track => {
-                    if (track.kind === 'video' && !state.peerConnection.getSenders().find(s => s.track === track)) {
-                         try { state.peerConnection.addTrack(track, state.localStream); }
-                         catch(e) { console.warn("Fehler beim Wiederherstellen des Kamera-Tracks: ", e); }
-                    }
-                });
-            }
-             updateVideoDisplay(UI.localVideo, UI.localScreenStatus, state.localStream, true);
+            // --- Stoppe Screensharing ---
+             if (state.screenStream) {
+                 state.screenStream.getTracks().forEach(track => track.stop());
+             }
+             state.screenStream = null;
+             state.isSharingScreen = false;
+             UI.shareScreenBtn.textContent = 'Bildschirm teilen';
+             UI.shareScreenBtn.classList.remove('danger-btn');
 
+             // Entferne Screen-Tracks von PeerConnection
+             if (state.peerConnection) {
+                 state.peerConnection.getSenders().forEach(sender => {
+                      if (sender.track && sender.track.getSettings && sender.track.getSettings().displaySurface) { // Prüfe ob es ein Screen Track ist
+                          state.peerConnection.removeTrack(sender).catch(e => console.warn("Fehler beim Entfernen des Screen-Tracks:", e));
+                      }
+                 });
+             }
+
+             // Stelle Kamera wieder her (falls Stream existiert)
+             if (state.localStream) {
+                  updateVideoDisplay(UI.localVideo, UI.localScreenStatus, state.localStream, true);
+                  // Füge Kamera-Tracks wieder zur PeerConnection hinzu (falls entfernt)
+                 if (state.peerConnection) {
+                     state.localStream.getTracks().forEach(track => {
+                         if (!state.peerConnection.getSenders().find(s => s.track === track)) {
+                              try { state.peerConnection.addTrack(track, state.localStream); } catch(e) {}
+                         }
+                     });
+                     await renegotiateIfNeeded(); // Neu verhandeln
+                 }
+             } else {
+                 // Falls kein Kamera-Stream existierte, initialisiere nur Audio neu
+                 await setupLocalMedia(); // Dies holt Kamera+Audio, wenn möglich
+             }
 
         } else {
-            // Start screen sharing
+            // --- Starte Screensharing ---
             try {
-                state.screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }); // audio for system audio
+                state.screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
                 state.isSharingScreen = true;
                 UI.shareScreenBtn.textContent = 'Teilen beenden';
                 UI.shareScreenBtn.classList.add('danger-btn');
-                updateVideoDisplay(UI.localVideo, UI.localScreenStatus, state.screenStream, true); // Show screen in local view
+                updateVideoDisplay(UI.localVideo, UI.localScreenStatus, state.screenStream, true); // Zeige Screen lokal an
 
-                // Replace video track in existing peer connection
                 if (state.peerConnection) {
-                    const videoTrack = state.screenStream.getVideoTracks()[0];
-                    const audioTrack = state.screenStream.getAudioTracks()[0]; // If screen audio is captured
+                    // Ersetze Video-Track durch Screen-Track
+                    const screenVideoTrack = state.screenStream.getVideoTracks()[0];
+                    const screenAudioTrack = state.screenStream.getAudioTracks()[0]; // Optional: System-Audio
 
-                    const videoSender = state.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-                    if (videoSender) {
-                        videoSender.replaceTrack(videoTrack);
-                    } else {
-                        state.peerConnection.addTrack(videoTrack, state.screenStream);
+                    const videoSender = state.peerConnection.getSenders().find(s => s.track?.kind === 'video');
+                    if (videoSender && screenVideoTrack) {
+                         videoSender.replaceTrack(screenVideoTrack).catch(e => console.error("Fehler beim Ersetzen Video-Track:", e));
+                    } else if (screenVideoTrack) {
+                         try { state.peerConnection.addTrack(screenVideoTrack, state.screenStream); } catch(e){}
                     }
-                    if (audioTrack) { // Also replace/add audio track if present
-                        const audioSender = state.peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio');
-                        // Be careful not to replace microphone audio if screen audio is separate
-                        // This simple example might replace mic if it's the first audio track.
-                        // A more robust solution would manage multiple audio tracks or mix them.
-                        if (audioSender && state.localStream && !state.localStream.getAudioTracks().includes(audioSender.track)) { // if existing audio sender is not mic
-                           audioSender.replaceTrack(audioTrack);
-                        } else if (audioTrack) {
-                           state.peerConnection.addTrack(audioTrack, state.screenStream);
+                    // Optional: Umgang mit Screen-Audio (ersetzt Mikrofon? Zusätzlicher Track?)
+                    // Hier ersetzen wir einfachheitshalber den bestehenden Audio-Track, falls Screen-Audio da ist
+                    if (screenAudioTrack) {
+                        const audioSender = state.peerConnection.getSenders().find(s => s.track?.kind === 'audio');
+                        if (audioSender) {
+                             audioSender.replaceTrack(screenAudioTrack).catch(e => console.error("Fehler beim Ersetzen Audio-Track:", e));
+                        } else {
+                             try { state.peerConnection.addTrack(screenAudioTrack, state.screenStream); } catch(e){}
                         }
                     }
+                    await renegotiateIfNeeded(); // Neu verhandeln nach Track-Änderung
                 }
 
-                state.screenStream.getVideoTracks()[0].onended = () => { // Listener for browser's "Stop sharing" button
-                    if (state.isSharingScreen) toggleScreenSharing();
+                // Listener für "Stop sharing" Button im Browser
+                state.screenStream.getVideoTracks()[0].onended = () => {
+                    if (state.isSharingScreen) toggleScreenSharing(); // Ruft diese Funktion erneut auf zum Stoppen
                 };
 
             } catch (err) {
@@ -771,12 +821,16 @@ fileInfo.classList.add('file-attachment');
                 displayError('Bildschirmfreigabe fehlgeschlagen.');
                 state.isSharingScreen = false;
                 UI.shareScreenBtn.textContent = 'Bildschirm teilen';
-                UI.shareScreenBtn.classList.remove('danger-btn');
+                 UI.shareScreenBtn.classList.remove('danger-btn');
+                 // Ggf. Kamera wiederherstellen
+                 if (state.localStream) updateVideoDisplay(UI.localVideo, UI.localScreenStatus, state.localStream, true);
             }
         }
+        UI.shareScreenBtn.disabled = false; // Button wieder aktivieren
     }
-    
+
     function toggleFullscreen(videoElement) {
+        if (!videoElement) return;
         if (!document.fullscreenElement) {
             if (videoElement.requestFullscreen) {
                 videoElement.requestFullscreen().catch(err => console.error(`Fullscreen error: ${err.message}`));
@@ -801,13 +855,12 @@ fileInfo.classList.add('file-attachment');
             return;
         }
         state.selectedFile = file;
-        // Optional: Show preview or file name
         UI.messageInput.placeholder = `Datei ausgewählt: ${file.name}. Nachricht optional.`;
     }
 
     function resetFileInput() {
         state.selectedFile = null;
-        UI.fileInput.value = ''; // Reset file input
+        if(UI.fileInput) UI.fileInput.value = ''; // Reset file input
         UI.messageInput.placeholder = 'Nachricht eingeben...';
     }
 
@@ -821,4 +874,5 @@ fileInfo.classList.add('file-attachment');
 
     // --- Init ---
     initializeUI();
+    populateMicList(); // Mikrofone schon beim Laden suchen
 });
