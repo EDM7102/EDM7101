@@ -16,20 +16,14 @@
             <aside class="sidebar">
                 <div class="connection-controls">
                     <h2>Verbindung</h2>
-                    <label for="serverUrl">Server URL:</label>
-                    <input type="text" id="serverUrl" value="ws://localhost:3000">
-                    
-                    <label for="roomId">Raum-ID:</label>
-                    <input type="text" id="roomId" value="default-room">
-                    
                     <label for="usernameInput">Benutzername:</label>
                     <input type="text" id="usernameInput" placeholder="Dein Name...">
-                    
+
                     <label for="micSelect">Mikrofon:</label>
                     <select id="micSelect" title="Mikrofon auswählen">
                         <option value="">Standard-Mikrofon</option>
                         </select>
-                    
+
                     <button id="connectBtn">Verbinden</button>
                     <button id="disconnectBtn" class="hidden danger-btn">Trennen</button>
                     <button id="shareScreenBtn" class="hidden">Bildschirm teilen</button>
@@ -77,6 +71,5 @@
     <audio id="notifSound" src="notif.mp3" preload="auto"></audio>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="app.js"></script>
-</body>
+    <script src="app.js"></script> </body>
 </html>
