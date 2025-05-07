@@ -5,48 +5,50 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] }
-});
+const io = new Server(server);
 
-// Statische Dateien aus /public servieren
+// Serviert statische Dateien aus dem Ordner 'public'
 app.use(express.static(path.join(__dirname, 'public')));
 
-const users = new Map();
+const users = new Map(); // socket.id => username
 
 io.on('connection', socket => {
-  let currentUser = '';
+  let currentUsername = '';
 
   socket.on('join', ({ username }) => {
-    currentUser = username;
+    currentUsername = username;
     users.set(socket.id, username);
-    io.emit('users', Array.from(users.values()));
+    sendUserList();
   });
 
   socket.on('message', data => {
-    io.emit('message', data);
+    io.emit('message', data); // { username, text, color }
   });
 
-  // WebRTC Signaling
-  socket.on('offer', data => {
-    socket.to(data.target).emit('offer', { from: socket.id, sdp: data.sdp });
+  socket.on('offer', ({ target, sdp }) => {
+    io.to(target).emit('offer', { from: socket.id, sdp });
   });
 
-  socket.on('answer', data => {
-    socket.to(data.target).emit('answer', { from: socket.id, sdp: data.sdp });
+  socket.on('answer', ({ target, sdp }) => {
+    io.to(target).emit('answer', { from: socket.id, sdp });
   });
 
-  socket.on('ice', data => {
-    socket.to(data.target).emit('ice', { from: socket.id, candidate: data.candidate });
+  socket.on('ice', ({ target, candidate }) => {
+    io.to(target).emit('ice', { from: socket.id, candidate });
   });
 
   socket.on('disconnect', () => {
     users.delete(socket.id);
-    io.emit('users', Array.from(users.values()));
+    sendUserList();
   });
+
+  function sendUserList() {
+    const list = Array.from(users.entries()).map(([id, name]) => ({ id, name }));
+    io.emit('users', list);
+  }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 server.listen(PORT, () => {
-  console.log(`✅ EDMBOOK läuft auf http://localhost:${PORT}`);
+  console.log(`✅ EDMBOOK Server läuft auf http://localhost:${PORT}`);
 });
