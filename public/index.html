@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>EDMBOOK</title>
+  <title>EDMBOOKeeeeee</title>
   <style>
     :root {
       --green: #4caf50;
@@ -268,6 +268,7 @@
       const pc = new RTCPeerConnection();
       pc.onicecandidate = e => e.candidate && socket.emit('ice', { target: targetId, candidate: e.candidate });
       pc.ontrack = e => {
+        // Das remoteVideo zeigt den Stream des Anderen (inkl. Bildschirm, falls geteilt)
         remoteVideo.srcObject = e.streams[0];
         remoteVideo.style.display = 'block';
         remoteOffline.style.display = 'none';
@@ -517,17 +518,23 @@
     shareScreenBtn.addEventListener('click', async () => {
       try {
         const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        displayStream.getVideoTracks().forEach(track => localStream.addTrack(track));
+        // Füge Video-Track zu localStream hinzu und PeerConnection (Renegotiation)
+        displayStream.getVideoTracks().forEach(track => {
+          localStream.addTrack(track);
+          if (peer) {
+            peer.addTrack(track, localStream);
+          }
+        });
         myVideo.srcObject = localStream;
         myVideo.style.display = 'block';
         myOffline.style.display = 'none';
 
-        if (users.length === 0) return;
-        peer = createPeer(users[0].id);
-        localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
-        const offer = await peer.createOffer();
-        await peer.setLocalDescription(offer);
-        socket.emit('offer', { target: users[0].id, sdp: offer });
+        // Wichtig: Renegotiation/Offer an den Peer schicken!
+        if (peer && users.length > 0) {
+          const offer = await peer.createOffer();
+          await peer.setLocalDescription(offer);
+          socket.emit('offer', { target: users[0].id, sdp: offer });
+        }
       } catch (err) {
         showError('Bildschirmfreigabe fehlgeschlagen.');
       }
