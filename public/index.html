@@ -315,13 +315,13 @@
         if (uname !== username) playNotifSound();
       });
       socket.on('users', list => {
-        // Sound nur, wenn ein neuer User dazukommt
         if (users.length && list.length > users.length) playNotifSound();
         updateUserList(list);
         users = list.filter(u => u.name !== username);
       });
       socket.on('offer', async ({ from, sdp }) => {
         peer = createPeer(from);
+        // --- STELLE SICHER, DASS AUDIO IMMER DA IST ---
         if (!localStream || localStream.getTracks().length === 0) {
           await initializeAudio();
         }
@@ -432,6 +432,7 @@
       setConnectionStatus(true);
 
       try {
+        // --- AUDIO IMMER DIREKT IN PEERCONNECTION, AUCH OHNE BILDSCHIRM ---
         if (users.length === 0) return;
         peer = createPeer(users[0].id);
         localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
@@ -516,7 +517,6 @@
     shareScreenBtn.addEventListener('click', async () => {
       try {
         const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        // Füge nur Video-Tracks hinzu, Audio ist schon vorhanden
         displayStream.getVideoTracks().forEach(track => localStream.addTrack(track));
         myVideo.srcObject = localStream;
         myVideo.style.display = 'block';
