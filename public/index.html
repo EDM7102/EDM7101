@@ -32,7 +32,6 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
     }
 
     header h1 {
@@ -101,11 +100,6 @@
       color: var(--text-light);
     }
 
-    button {
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
     #connectBtn.disconnected {
       background-color: var(--red);
       color: white;
@@ -114,6 +108,11 @@
     #connectBtn.connected {
       background-color: var(--green);
       color: white;
+    }
+
+    button {
+      cursor: pointer;
+      transition: all 0.2s ease;
     }
 
     button:hover {
@@ -127,7 +126,6 @@
       padding: 10px;
       overflow-y: auto;
       margin-bottom: 10px;
-      scrollbar-width: thin;
     }
 
     .message {
@@ -171,12 +169,9 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      color: var(--red);
-      font-weight: bold;
-      font-size: 1.2rem;
-      text-transform: uppercase;
       box-shadow: 0 0 10px rgba(0,0,0,0.3);
       position: relative;
+      overflow: hidden;
     }
 
     .fullscreen-btn {
@@ -196,16 +191,29 @@
       background: #555;
     }
 
-    /* Responsive Design */
+    .offline-label {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #ff5555;
+      font-weight: bold;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 6px 12px;
+      border-radius: 10px;
+    }
+
     @media (max-width: 768px) {
       .container {
         flex-direction: column;
       }
+
       .chat-section, .screen-section {
         flex: none;
         width: 100%;
         padding: 10px;
       }
+
       .connection-bar, .input-area {
         flex-direction: column;
         align-items: stretch;
@@ -241,12 +249,12 @@
     <div class="screen-section">
       <div class="screen-box" id="myScreen">
         <video id="myVideo" autoplay muted style="width: 100%; height: 100%; object-fit: contain; display: none;"></video>
-        <span id="myStatus">🔴 OFFLINE</span>
+        <div class="offline-label" id="myOffline">🔴 OFFLINE</div>
         <button class="fullscreen-btn" onclick="toggleFullscreen('myScreen')">Vollbild</button>
       </div>
       <div class="screen-box" id="remoteScreen">
         <video id="remoteVideo" autoplay style="width: 100%; height: 100%; object-fit: contain; display: none;"></video>
-        <span id="remoteStatus">🔴 OFFLINE</span>
+        <div class="offline-label" id="remoteOffline">🔴 OFFLINE</div>
         <button class="fullscreen-btn" onclick="toggleFullscreen('remoteScreen')">Vollbild</button>
       </div>
     </div>
@@ -265,8 +273,8 @@
     const sendBtn = document.getElementById('sendBtn');
     const myVideo = document.getElementById('myVideo');
     const remoteVideo = document.getElementById('remoteVideo');
-    const myStatus = document.getElementById('myStatus');
-    const remoteStatus = document.getElementById('remoteStatus');
+    const myOffline = document.getElementById('myOffline');
+    const remoteOffline = document.getElementById('remoteOffline');
 
     let username = '', userColor = '', peer = null, localStream = null;
     let users = [];
@@ -275,10 +283,11 @@
       username = usernameInput.value.trim();
       if (!username) return alert('Bitte Benutzernamen eingeben.');
       usernameInput.readOnly = true;
-      userColor = '#' + Math.floor(Math.random()*16777215).toString(16);
+      userColor = '#' + Math.floor(Math.random() * 16777215).toString(16);
       socket.emit('join', { username });
       connectBtn.classList.remove('disconnected');
       connectBtn.classList.add('connected');
+      connectBtn.textContent = 'Verbunden';
     });
 
     sendBtn.addEventListener('click', () => {
@@ -323,7 +332,7 @@
         ]);
         myVideo.srcObject = localStream;
         myVideo.style.display = 'block';
-        myStatus.textContent = '🟢 ONLINE';
+        myOffline.style.display = 'none';
 
         if (users.length === 0) return;
         peer = new RTCPeerConnection();
@@ -336,7 +345,7 @@
         peer.ontrack = e => {
           remoteVideo.srcObject = e.streams[0];
           remoteVideo.style.display = 'block';
-          remoteStatus.textContent = '🟢 ONLINE';
+          remoteOffline.style.display = 'none';
         };
         const offer = await peer.createOffer();
         await peer.setLocalDescription(offer);
@@ -356,7 +365,7 @@
       peer.ontrack = e => {
         remoteVideo.srcObject = e.streams[0];
         remoteVideo.style.display = 'block';
-        remoteStatus.textContent = '🟢 ONLINE';
+        remoteOffline.style.display = 'none';
       };
       await peer.setRemoteDescription(new RTCSessionDescription(sdp));
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
