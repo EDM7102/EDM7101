@@ -1,16 +1,35 @@
 :root {
-    --primary-bg: #2c3e50; /* Dunkelblau-Grau */
-    --secondary-bg: #34495e; /* Etwas helleres Blau-Grau */
-    --accent-color: #3498db; /* Helles Blau */
-    --text-color: #ecf0f1; /* Sehr helles Grau / Weiß */
-    --text-secondary-color: #bdc3c7; /* Helleres Grau */
-    --error-color: #e74c3c; /* Rot */
-    --success-color: #2ecc71; /* Grün */
-    --typing-indicator-color: #95a5a6; /* Grau */
-    --message-bg-me: #2980b9; /* Eigenes Nachrichtenblau */
-    --message-bg-other: #7f8c8d; /* Fremde Nachrichtengrau */
-    --border-color: #4a627a;
-    --input-bg: #22303f;
+    --primary-bg: #1a1a1a;            /* Haupt-Hintergrund (z.B. body) */
+    --secondary-bg: #242424;          /* Sekundärer Hintergrund (z.B. Sidebar, Header, Footer) */
+    --content-area-bg: #2a2a2a;       /* Hintergrund für scrollbare Inhaltsbereiche (z.B. Chat-Nachrichten) */
+    --content-element-bg: #333333;    /* Hintergrund für einzelne Elemente (z.B. Nachrichtenblasen, Eingabefelder) */
+
+    --text-color: #e0e0e0;            /* Primäre Textfarbe */
+    --text-secondary-color: #a0a0a0;    /* Sekundäre Textfarbe (z.B. Platzhalter, weniger wichtige Labels) */
+    --text-muted-color: #808080;        /* Stummgeschaltete Textfarbe (z.B. Zeitstempel, Tipp-Indikator) */
+    --text-on-accent-bg: #ffffff;     /* Textfarbe auf farbigen Akzent-Hintergründen (z.B. Fehler-/Erfolgs-Badges) */
+
+    --border-color: #3d3d3d;           /* Rahmenfarbe */
+
+    --accent-highlight-color: #c0c0c0; /* Heller Grauton für wichtige Hervorhebungen (z.B. Überschriften, Benutzernamen in Nachrichten) */
+    --link-color: #82aaff;            /* Ein sehr dezentes Hellblau für Links (Standard-Affordanz). Alternativ: var(--accent-highlight-color) für reines Grau. */
+
+    --button-bg: #4a4a4a;
+    --button-hover-bg: #5a5a5a;
+    --button-text-color: var(--text-color);
+
+    --button-primary-bg: #5c5c5c;       /* Für Hauptaktions-Buttons */
+    --button-primary-hover-bg: #6c6c6c;
+
+    --message-bg-me: #454545;           /* Hintergrund für eigene Nachrichten */
+    --message-text-me: var(--text-color);
+    --message-bg-other: var(--content-element-bg); /* Hintergrund für Nachrichten anderer Benutzer */
+    --message-text-other: var(--text-color);
+
+    --error-bg: #d32f2f;                /* Hintergrund für Fehlermeldungen/-anzeigen */
+    --error-text-color: var(--text-on-accent-bg);
+    --success-bg: #388e3c;              /* Hintergrund für Erfolgsmeldungen/-anzeigen */
+    --success-text-color: var(--text-on-accent-bg);
 }
 
 body {
@@ -33,14 +52,14 @@ body {
     max-height: 900px;
     background-color: var(--secondary-bg);
     border-radius: 8px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3); /* Etwas stärkerer Schatten für dunkles Design */
     display: flex;
     flex-direction: column;
     overflow: hidden;
 }
 
 .app-header {
-    background-color: #1f2b38;
+    background-color: var(--secondary-bg); /* Angepasst */
     padding: 10px 20px;
     display: flex;
     justify-content: space-between;
@@ -51,7 +70,7 @@ body {
 .app-header h1 {
     margin: 0;
     font-size: 1.4em;
-    color: var(--accent-color);
+    color: var(--accent-highlight-color); /* Angepasst */
 }
 
 .status-indicator {
@@ -60,20 +79,20 @@ body {
     font-size: 0.9em;
     font-weight: bold;
 }
-.status-indicator.connected { background-color: var(--success-color); color: white; }
-.status-indicator.disconnected { background-color: var(--error-color); color: white; }
-.status-indicator.connecting { background-color: #f39c12; color: white; }
+.status-indicator.connected { background-color: var(--success-bg); color: var(--success-text-color); }
+.status-indicator.disconnected { background-color: var(--error-bg); color: var(--error-text-color); }
+.status-indicator.connecting { background-color: #f39c12; color: white; } /* Orange für "Verbinde..." bleibt vorerst */
 
 
 .main-content {
     display: flex;
     flex-grow: 1;
-    overflow: hidden; /* Wichtig für scrollbare Bereiche */
+    overflow: hidden;
 }
 
 .sidebar {
     width: 280px;
-    background-color: var(--primary-bg);
+    background-color: var(--secondary-bg); /* Angepasst */
     padding: 15px;
     border-right: 1px solid var(--border-color);
     display: flex;
@@ -86,55 +105,82 @@ body {
     font-size: 1.1em;
     margin-top: 0;
     margin-bottom: 10px;
-    color: var(--accent-color);
+    color: var(--accent-highlight-color); /* Angepasst */
     border-bottom: 1px solid var(--border-color);
     padding-bottom: 5px;
 }
 
 .connection-controls input[type="text"],
 .connection-controls select {
-    width: calc(100% - 20px); /* Padding berücksichtigen */
+    width: calc(100% - 20px);
     padding: 10px;
     margin-bottom: 10px;
     border: 1px solid var(--border-color);
     border-radius: 4px;
-    background-color: var(--input-bg);
+    background-color: var(--content-element-bg); /* Angepasst */
     color: var(--text-color);
+}
+.connection-controls input[type="text"]::placeholder {
+    color: var(--text-secondary-color);
 }
 .connection-controls select {
     appearance: none;
-    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23bdc3c7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a0a0a0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e"); /* Pfeilfarbe angepasst */
     background-repeat: no-repeat;
     background-position: right 10px center;
     background-size: 1em;
-    padding-right: 2.5em; /* Platz für Pfeil */
+    padding-right: 2.5em;
 }
 
-
-.connection-controls button {
-    width: 100%;
+/* Allgemeine Button-Stile */
+.connection-controls button,
+.message-input-area button,
+.file-upload-label { /* Label als Button gestyled */
     padding: 10px;
     border: none;
     border-radius: 4px;
-    background-color: var(--accent-color);
-    color: white;
+    background-color: var(--button-bg);
+    color: var(--button-text-color);
     cursor: pointer;
     font-size: 1em;
     margin-bottom: 8px;
     transition: background-color 0.2s;
+    text-align: center;
 }
-.connection-controls button:hover {
-    background-color: #2980b9;
+.connection-controls button:hover,
+.message-input-area button:hover,
+.file-upload-label:hover {
+    background-color: var(--button-hover-bg);
 }
-.connection-controls button.danger-btn {
-    background-color: var(--error-color);
+
+/* Primäre Aktionsbuttons */
+#connectBtn, #disconnectBtn, #shareScreenBtn, #sendBtn {
+    background-color: var(--button-primary-bg);
 }
-.connection-controls button.danger-btn:hover {
-    background-color: #c0392b;
+#connectBtn:hover, #disconnectBtn:hover, #shareScreenBtn:hover, #sendBtn:hover {
+    background-color: var(--button-primary-hover-bg);
 }
+
+/* Spezifische Button-Breiten und Danger-Styles */
+.connection-controls button { /* Diese Buttons sollen volle Breite haben */
+    width: 100%;
+}
+#disconnectBtn.danger-btn, /* Wenn disconnectBtn die Klasse danger-btn hat */
+#shareScreenBtn.danger-btn { /* Wenn shareScreenBtn die Klasse danger-btn hat (z.B. "Teilen beenden") */
+    background-color: var(--error-bg);
+    color: var(--error-text-color);
+}
+#disconnectBtn.danger-btn:hover,
+#shareScreenBtn.danger-btn:hover {
+    background-color: #a92424; /* Dunkleres Rot für Hover auf Danger */
+}
+
 .connection-controls button:disabled,
-.connection-controls select:disabled {
-    background-color: #555;
+.connection-controls select:disabled,
+.message-input-area button:disabled,
+.file-upload-label[disabled] { /* Annahme: Label könnte auch disabled werden */
+    background-color: #383838; /* Dunkleres Grau für disabled */
+    color: var(--text-muted-color);
     cursor: not-allowed;
     opacity: 0.7;
 }
@@ -150,14 +196,18 @@ body {
     display: flex;
     align-items: center;
     word-break: break-all;
+    color: var(--text-secondary-color);
 }
-.user-dot {
+#userList li .user-dot { /* User-Punkte bleiben farbig für Unterscheidung, es sei denn, du änderst CONFIG.USER_COLORS in app.js */
     width: 10px;
     height: 10px;
     border-radius: 50%;
     margin-right: 8px;
-    background-color: var(--success-color); /* Default, wird per JS überschrieben */
+    background-color: var(--success-bg); /* Wird per JS mit User-Farbe überschrieben */
     flex-shrink: 0;
+}
+#userList li strong { /* Eigener Name */
+    color: var(--text-color);
 }
 
 
@@ -165,30 +215,30 @@ body {
     flex-grow: 1;
     display: flex;
     flex-direction: column;
-    background-color: var(--secondary-bg);
-    padding: 0px; /* Wird durch innere Elemente gehandhabt */
+    background-color: var(--content-area-bg); /* Angepasst */
+    padding: 0px;
 }
 
 .video-chat-area {
     display: flex;
     justify-content: space-around;
     padding: 10px;
-    background-color: #273746;
+    background-color: var(--secondary-bg); /* Angepasst */
     border-bottom: 1px solid var(--border-color);
     gap: 10px;
 }
 .video-box {
     flex: 1;
-    min-width: 0; /* Wichtig für Flexbox-Kinder */
-    background-color: #1f2b38;
+    min-width: 0;
+    background-color: var(--content-element-bg); /* Angepasst */
     border-radius: 6px;
     padding: 10px;
     position: relative;
     display: flex;
     flex-direction: column;
-    align-items: center; /* Zentriert Statuslabel */
-    justify-content: center; /* Zentriert Statuslabel */
-    min-height: 150px; /* Mindesthöhe für Box */
+    align-items: center;
+    justify-content: center;
+    min-height: 150px;
 }
 .video-box h3 {
     margin: 0 0 8px 0;
@@ -198,42 +248,42 @@ body {
 }
 .video-box video {
     width: 100%;
-    max-height: 200px; /* Begrenzt Höhe, Aspekt Ratio wird beibehalten */
+    max-height: 200px;
     border-radius: 4px;
-    background-color: black;
-    display: block; /* Entfernt unteren Abstand */
+    background-color: black; /* Video-Hintergrund bleibt schwarz */
+    display: block;
 }
 .video-box video.hidden { display: none; }
 
 .screen-status-label {
-    color: white;
+    color: var(--text-on-accent-bg);
     padding: 8px 12px;
     border-radius: 4px;
     font-size: 0.9em;
     font-weight: bold;
     text-align: center;
-    position: absolute; /* Über Video legen, wenn Video nicht hidden */
+    position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
 }
-.screen-status-label.offline { background-color: var(--error-color); }
-.screen-status-label.loading { background-color: #f39c12; }
+.screen-status-label.offline { background-color: var(--error-bg); }
+.screen-status-label.loading { background-color: #f39c12; /* Orange für Loading bleibt */ }
 .screen-status-label.hidden { display: none; }
 
 .video-box video:not(.hidden) + .screen-status-label {
-    display: none; /* Status nur anzeigen, wenn Video hidden */
+    display: none;
 }
 
 .fullscreen-btn {
     position: absolute;
-    bottom: 15px; /* Angepasst, um nicht im Text zu sein */
+    bottom: 15px;
     right: 15px;
     padding: 6px 10px;
     font-size: 0.8em;
-    background-color: rgba(0,0,0,0.5);
-    color: white;
-    border: 1px solid rgba(255,255,255,0.5);
+    background-color: rgba(40,40,40,0.7); /* Dunklerer Hintergrund für Button auf Video */
+    color: var(--text-color);
+    border: 1px solid rgba(180,180,180,0.5); /* Hellerer Rand */
     border-radius: 4px;
     cursor: pointer;
     z-index: 10;
@@ -254,39 +304,35 @@ body {
     border-radius: 12px;
     max-width: 75%;
     word-wrap: break-word;
-    position: relative; /* Für Timestamp */
+    position: relative;
 }
 .message .name {
     font-weight: bold;
     display: block;
     font-size: 0.85em;
     margin-bottom: 3px;
+    color: var(--accent-highlight-color); /* Benutzernamen in Nachrichten hervorgehoben */
 }
 .message.me {
     background-color: var(--message-bg-me);
-    color: white;
+    color: var(--message-text-me);
     align-self: flex-end;
     border-bottom-right-radius: 3px;
 }
-.message.me .name { color: #eaffff; }
-
 .message:not(.me) {
     background-color: var(--message-bg-other);
-    color: #2c3e50;
+    color: var(--message-text-other);
     align-self: flex-start;
     border-bottom-left-radius: 3px;
 }
-.message:not(.me) .name { color: #333; }
 
 .message .timestamp {
     font-size: 0.7em;
-    color: rgba(255,255,255,0.6);
+    color: var(--text-muted-color); /* Angepasst */
     position: absolute;
     bottom: 5px;
     right: 10px;
 }
-.message.me .timestamp { color: rgba(255,255,255,0.7); }
-.message:not(.me) .timestamp { color: rgba(0,0,0,0.4); }
 
 .file-attachment img {
     max-width: 200px;
@@ -295,83 +341,81 @@ body {
     cursor: pointer;
     display: block;
     margin-bottom: 5px;
+    border: 1px solid var(--border-color); /* Rand für Bilder */
 }
-.file-attachment span:not(.name) { /* Für Datei-Icon */
+.file-attachment span:not(.name) {
     font-size: 2em;
     margin-right: 5px;
+    color: var(--text-secondary-color);
 }
 .file-attachment a {
-    color: inherit;
+    color: var(--link-color); /* Angepasst */
     text-decoration: underline;
     font-size: 0.9em;
+}
+.file-attachment a:hover {
+    text-decoration: none;
 }
 
 .typing-indicator {
     padding: 5px 15px;
     font-style: italic;
-    color: var(--typing-indicator-color);
+    color: var(--text-muted-color); /* Angepasst */
     font-size: 0.9em;
-    min-height: 20px; /* Platzhalter, damit Layout nicht springt */
+    min-height: 20px;
 }
 
 .message-input-area {
     display: flex;
     padding: 10px 15px;
-    background-color: var(--primary-bg);
+    background-color: var(--secondary-bg); /* Angepasst */
     border-top: 1px solid var(--border-color);
-    align-items: flex-end; /* Für mehrzeiliges Textarea */
+    align-items: flex-end;
 }
 #messageInput {
     flex-grow: 1;
     padding: 10px;
     border: 1px solid var(--border-color);
     border-radius: 20px;
-    background-color: var(--input-bg);
+    background-color: var(--content-element-bg); /* Angepasst */
     color: var(--text-color);
     resize: none;
-    overflow-y: auto; /* Erlaubt Scrollen bei max-height */
-    max-height: 100px; /* Begrenzt Höhe des Textarea */
+    overflow-y: auto;
+    max-height: 100px;
     font-size: 1em;
     line-height: 1.4;
 }
+#messageInput::placeholder {
+    color: var(--text-secondary-color);
+}
 #messageInput:disabled {
-    background-color: #555;
+    background-color: #383838; /* Dunkleres Grau für disabled */
     opacity: 0.7;
 }
 
-.message-input-area button, .file-upload-label {
-    padding: 10px 15px;
+.message-input-area #sendBtn { /* Send-Button ist primär */
     margin-left: 10px;
-    border: none;
     border-radius: 20px;
-    background-color: var(--accent-color);
-    color: white;
-    cursor: pointer;
-    font-size: 1em;
-    transition: background-color 0.2s;
 }
-.message-input-area button:hover, .file-upload-label:hover {
-    background-color: #2980b9;
-}
-.message-input-area button:disabled {
-    background-color: #555;
-    cursor: not-allowed;
-}
-.file-upload-label {
+
+.file-upload-label { /* Für das Büroklammer-Icon */
+    padding: 8px 12px; /* Etwas kleiner als Text-Buttons */
+    margin-left: 10px;
+    border-radius: 20px; /* Passend zum Eingabefeld */
     font-size: 1.2em;
-    padding: 8px 12px;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
+
 .error-message {
-    background-color: var(--error-color);
-    color: white;
+    background-color: var(--error-bg);
+    color: var(--error-text-color);
     padding: 10px;
     text-align: center;
     border-radius: 4px;
-    margin: 10px 15px 0 15px; /* Angepasst */
+    margin: 10px 15px 0 15px;
 }
 
 .hidden {
@@ -393,7 +437,7 @@ body {
         width: 100%;
         border-right: none;
         border-bottom: 1px solid var(--border-color);
-        max-height: 40vh; /* Begrenzt Höhe im mobilen Layout */
+        max-height: 40vh;
     }
     .video-chat-area {
         flex-direction: column;
