@@ -1,4 +1,4 @@
-<!-- EDMBOOK HTML mit "Trennen"-Button -->
+<!-- EDMBOOK mit vollständiger Verbindung & Mikrofon-Fix -->
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -70,7 +70,7 @@
     <div class="chat-section">
       <div class="connection-bar">
         <label for="mic">Mikrofon:</label>
-        <select id="mic"><option>Standard</option></select>
+        <select id="mic"></select>
         <input type="text" id="username" placeholder="Benutzername" />
         <button id="connectBtn" class="disconnected">Verbinden</button>
         <button id="disconnectBtn" class="disconnected" style="display: none;">Trennen</button>
@@ -99,7 +99,7 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    const socket = io();
+    let socket;
     const usernameInput = document.getElementById('username');
     const connectBtn = document.getElementById('connectBtn');
     const disconnectBtn = document.getElementById('disconnectBtn');
@@ -117,7 +117,47 @@
     let username = '', userColor = '', peer = null, localStream = null;
     let users = [];
 
-    connectBtn.addEventListener('click', () => {
+    async function initSocket() {
+      socket = io();
+      socket.on('message', handleMessage);
+      socket.on('users', updateUserList);
+      socket.on('offer', handleOffer);
+      socket.on('answer', ({ sdp }) => peer.setRemoteDescription(new RTCSessionDescription(sdp)));
+      socket.on('ice', ({ candidate }) => peer.addIceCandidate(new RTCIceCandidate(candidate)));
+    }
+
+    function handleMessage({ username, text, color }) {
+      const msg = document.createElement('div');
+      msg.classList.add('message');
+      msg.innerHTML = `<span class="name" style="color:${color}">${username}:</span> ${text}`;
+      messages.appendChild(msg);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function updateUserList(list) {
+      userList.innerHTML = '';
+      users = list.filter(u => u.name !== username);
+      list.forEach(u => {
+        const li = document.createElement('li');
+        li.textContent = u.name;
+        userList.appendChild(li);
+      });
+    }
+
+    async function updateMicList() {
+      micSelect.innerHTML = '';
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      devices.filter(d => d.kind === 'audioinput').forEach((d, i) => {
+        const opt = document.createElement('option');
+        opt.value = d.deviceId;
+        opt.textContent = d.label || `Mikrofon ${i+1}`;
+        micSelect.appendChild(opt);
+      });
+    }
+
+    connectBtn.addEventListener('click', async () => {
+      await updateMicList();
+      await initSocket();
       username = usernameInput.value.trim();
       if (!username) return alert('Bitte Benutzernamen eingeben.');
       usernameInput.readOnly = true;
@@ -125,24 +165,20 @@
       socket.emit('join', { username });
       connectBtn.style.display = 'none';
       disconnectBtn.style.display = 'inline-block';
-      disconnectBtn.classList.remove('disconnected');
-      disconnectBtn.classList.add('connected');
     });
 
     disconnectBtn.addEventListener('click', () => {
-      socket.disconnect();
+      if (socket) socket.disconnect();
       connectBtn.style.display = 'inline-block';
       disconnectBtn.style.display = 'none';
-      connectBtn.classList.remove('connected');
-      connectBtn.classList.add('disconnected');
-      connectBtn.textContent = 'Verbinden';
       usernameInput.readOnly = false;
       messages.innerHTML = '';
       userList.innerHTML = '';
-      if (myVideo.srcObject) myVideo.srcObject.getTracks().forEach(t => t.stop());
-      if (remoteVideo.srcObject) remoteVideo.srcObject.getTracks().forEach(t => t.stop());
-      myVideo.style.display = 'none';
-      remoteVideo.style.display = 'none';
+      [myVideo, remoteVideo].forEach(v => {
+        if (v.srcObject) v.srcObject.getTracks().forEach(t => t.stop());
+        v.srcObject = null;
+        v.style.display = 'none';
+      });
       myOffline.style.display = 'block';
       remoteOffline.style.display = 'block';
     });
@@ -161,24 +197,6 @@
       }
     });
 
-    socket.on('message', ({ username, text, color }) => {
-      const msg = document.createElement('div');
-      msg.classList.add('message');
-      msg.innerHTML = `<span class="name" style="color:${color}">${username}:</span> ${text}`;
-      messages.appendChild(msg);
-      messages.scrollTop = messages.scrollHeight;
-    });
-
-    socket.on('users', list => {
-      userList.innerHTML = '';
-      users = list.filter(u => u.name !== username);
-      list.forEach(u => {
-        const li = document.createElement('li');
-        li.textContent = u.name;
-        userList.appendChild(li);
-      });
-    });
-
     shareScreenBtn.addEventListener('click', async () => {
       try {
         const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
@@ -187,11 +205,10 @@
         myVideo.srcObject = localStream;
         myVideo.style.display = 'block';
         myOffline.style.display = 'none';
-
         if (users.length === 0) return;
         peer = new RTCPeerConnection();
-        localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
-        peer.onicecandidate = e => { if (e.candidate) socket.emit('ice', { target: users[0].id, candidate: e.candidate }); };
+        localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
+        peer.onicecandidate = e => e.candidate && socket.emit('ice', { target: users[0].id, candidate: e.candidate });
         peer.ontrack = e => {
           remoteVideo.srcObject = e.streams[0];
           remoteVideo.style.display = 'block';
@@ -205,9 +222,9 @@
       }
     });
 
-    socket.on('offer', async ({ from, sdp }) => {
+    async function handleOffer({ from, sdp }) {
       peer = new RTCPeerConnection();
-      peer.onicecandidate = e => { if (e.candidate) socket.emit('ice', { target: from, candidate: e.candidate }); };
+      peer.onicecandidate = e => e.candidate && socket.emit('ice', { target: from, candidate: e.candidate });
       peer.ontrack = e => {
         remoteVideo.srcObject = e.streams[0];
         remoteVideo.style.display = 'block';
@@ -215,27 +232,15 @@
       };
       await peer.setRemoteDescription(new RTCSessionDescription(sdp));
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(track => peer.addTrack(track, stream));
+      stream.getTracks().forEach(t => peer.addTrack(t, stream));
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
       socket.emit('answer', { target: from, sdp: answer });
-    });
-
-    socket.on('answer', ({ sdp }) => {
-      peer.setRemoteDescription(new RTCSessionDescription(sdp));
-    });
-
-    socket.on('ice', ({ candidate }) => {
-      peer.addIceCandidate(new RTCIceCandidate(candidate));
-    });
+    }
 
     function toggleFullscreen(id) {
-      const elem = document.getElementById(id);
-      if (!document.fullscreenElement) {
-        elem.requestFullscreen().catch(err => alert('Vollbildfehler: ' + err));
-      } else {
-        document.exitFullscreen();
-      }
+      const el = document.getElementById(id);
+      if (!document.fullscreenElement) el.requestFullscreen(); else document.exitFullscreen();
     }
   </script>
 </body>
