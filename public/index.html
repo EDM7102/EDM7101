@@ -71,20 +71,21 @@
       font-size: 1rem;
       transition: box-shadow 0.2s, border 0.2s, background 0.2s, color 0.2s;
     }
-    button {
-      background: var(--primary);
-      color: white;
-      cursor: pointer;
-      font-weight: 500;
+    button, #shareScreenBtn, #sendBtn {
+      background: #2c2c2c;
+      color: var(--text);
       box-shadow: 0 2px 8px #0002;
+      font-weight: 500;
+      cursor: pointer;
     }
-    button:hover, button:focus {
-      background: var(--primary-dark);
+    button:hover, #shareScreenBtn:hover, #sendBtn:hover,
+    button:focus, #shareScreenBtn:focus, #sendBtn:focus {
+      background: #444;
       color: #fff;
       transform: translateY(-2px) scale(1.03);
       box-shadow: 0 4px 20px #0004;
     }
-    button:active {
+    button:active, #shareScreenBtn:active, #sendBtn:active {
       transform: scale(0.97);
       background: #222b;
     }
@@ -198,6 +199,8 @@
     </div>
   </div>
 
+  <audio id="notifSound" src="https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b7f3b.mp3" preload="auto"></audio>
+
   <script src="/socket.io/socket.io.js"></script>
   <script>
     // --- Hilfsfunktion gegen XSS ---
@@ -234,6 +237,7 @@
     const typingIndicator = document.getElementById('typingIndicator');
     const fileInput = document.getElementById('fileInput');
     const connectionStatus = document.getElementById('connectionStatus');
+    const notifSound = document.getElementById('notifSound');
 
     // --- Fehleranzeige ---
     function showError(msg) {
@@ -253,6 +257,11 @@
       }
     }
     setConnectionStatus(false);
+
+    function playNotifSound() {
+      notifSound.currentTime = 0;
+      notifSound.play();
+    }
 
     // --- PeerConnection-Erstellung ---
     function createPeer(targetId) {
@@ -282,23 +291,41 @@
       }
     }
 
+    // --- Audio-Initialisierung unabhängig von Bildschirmfreigabe ---
+    async function initializeAudio() {
+      try {
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        localStream = new MediaStream();
+        audioStream.getTracks().forEach((track) => localStream.addTrack(track));
+      } catch (error) {
+        console.error("Fehler bei der Initialisierung des Audio-Streams:", error);
+        showError("Mikrofonzugriff fehlgeschlagen.");
+      }
+    }
+
     // --- Socket-Initialisierung ---
     async function initSocket() {
       socket = io();
       socket.on('message', ({ username: uname, text, color }) => {
         appendMessage(uname, text, color);
+        if (uname !== username) playNotifSound();
       });
       socket.on('file', ({ username: uname, fileName, fileType, fileData, color }) => {
         appendFileMessage(uname, fileName, fileType, fileData, color);
+        if (uname !== username) playNotifSound();
       });
       socket.on('users', list => {
+        // Sound nur, wenn ein neuer User dazukommt
+        if (users.length && list.length > users.length) playNotifSound();
         updateUserList(list);
         users = list.filter(u => u.name !== username);
       });
       socket.on('offer', async ({ from, sdp }) => {
         peer = createPeer(from);
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach(t => peer.addTrack(t, stream));
+        if (!localStream || localStream.getTracks().length === 0) {
+          await initializeAudio();
+        }
+        localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
         await peer.setRemoteDescription(new RTCSessionDescription(sdp));
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
@@ -316,6 +343,7 @@
         if (typingUser !== username) {
           typingUsers.add(typingUser);
           updateTypingIndicator();
+          playNotifSound();
         }
         if (typingTimeout) clearTimeout(typingTimeout);
         typingTimeout = setTimeout(() => {
@@ -339,7 +367,6 @@
       if (uname === username) msg.classList.add('me');
       msg.innerHTML = `<span class="name" style="color:${color}">${escapeHTML(uname)}:</span> ${escapeHTML(text)}`;
       messages.appendChild(msg);
-      // Animation neu starten (Safari/Browsers die nachträglich einfügen)
       msg.style.opacity = "0";
       setTimeout(()=>msg.style.opacity = "1", 20);
       messages.scrollTop = messages.scrollHeight;
@@ -380,11 +407,22 @@
       }
     }
 
+    // --- Benutzername aus LocalStorage laden ---
+    document.addEventListener('DOMContentLoaded', () => {
+      const savedName = localStorage.getItem('username');
+      if (savedName) usernameInput.value = savedName;
+      if (Notification.permission !== "granted") {
+        Notification.requestPermission();
+      }
+    });
+
     // --- Verbinden ---
     connectBtn.addEventListener('click', async () => {
       await updateMicList();
+      await initializeAudio();
       await initSocket();
       username = usernameInput.value.trim();
+      localStorage.setItem('username', username);
       if (!username) return showError('Bitte Benutzernamen eingeben.');
       usernameInput.readOnly = true;
       userColor = userColors[Math.floor(Math.random() * userColors.length)];
@@ -394,8 +432,6 @@
       setConnectionStatus(true);
 
       try {
-        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        localStream = audioStream;
         if (users.length === 0) return;
         peer = createPeer(users[0].id);
         localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
@@ -480,8 +516,8 @@
     shareScreenBtn.addEventListener('click', async () => {
       try {
         const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        localStream = new MediaStream([...displayStream.getVideoTracks(), ...audioStream.getAudioTracks()]);
+        // Füge nur Video-Tracks hinzu, Audio ist schon vorhanden
+        displayStream.getVideoTracks().forEach(track => localStream.addTrack(track));
         myVideo.srcObject = localStream;
         myVideo.style.display = 'block';
         myOffline.style.display = 'none';
@@ -502,13 +538,6 @@
       const el = document.getElementById(id);
       if (!document.fullscreenElement) el.requestFullscreen(); else document.exitFullscreen();
     }
-
-    // --- Benachrichtigungs-Berechtigung ---
-    document.addEventListener('DOMContentLoaded', () => {
-      if (Notification.permission !== "granted") {
-        Notification.requestPermission();
-      }
-    });
   </script>
 </body>
 </html>
