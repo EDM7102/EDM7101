@@ -1,3 +1,4 @@
+<!-- EDMBOOK HTML mit "Trennen"-Button -->
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -7,217 +8,52 @@
   <style>
     :root {
       --green: #4caf50;
-      --green-dark: #388e3c;
       --red: #f44336;
-      --bg-dark: #121212;
-      --bg-panel: #1e1e1e;
-      --bg-chat: #2a2a2a;
-      --text-light: #e0e0e0;
+      --dark-bg: #121212;
+      --panel-bg: #1e1e1e;
+      --text: #e0e0e0;
     }
-
     body {
       margin: 0;
       font-family: 'Segoe UI', sans-serif;
-      background-color: var(--bg-dark);
-      color: var(--text-light);
+      background: var(--dark-bg);
+      color: var(--text);
       display: flex;
       flex-direction: column;
       height: 100vh;
-      overflow: hidden;
     }
-
     header {
-      background-color: var(--bg-panel);
+      background: var(--panel-bg);
       padding: 12px 20px;
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
-
-    header h1 {
-      margin: 0;
-      font-size: 1.5rem;
-      color: white;
-    }
-
-    .online-users {
-      background-color: var(--bg-panel);
-      padding: 8px 12px;
-      border-radius: 8px;
-    }
-
-    .online-users h3 {
-      margin: 0 0 6px 0;
-      font-size: 0.95rem;
-      color: var(--green);
-    }
-
-    .online-users ul {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .online-users li {
-      background-color: var(--bg-chat);
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 0.9rem;
-    }
-
-    .container {
-      display: flex;
-      flex-direction: row;
-      flex: 1;
-      width: 100%;
-    }
-
-    .chat-section {
-      flex: 2;
-      display: flex;
-      flex-direction: column;
-      padding: 20px;
-      border-right: 1px solid #333;
-    }
-
-    .connection-bar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 20px;
-      align-items: center;
-    }
-
-    input, select, button {
-      padding: 8px 12px;
-      border-radius: 8px;
-      border: none;
-      outline: none;
-      background-color: #2c2c2c;
-      color: var(--text-light);
-    }
-
-    #connectBtn.disconnected {
-      background-color: var(--red);
-      color: white;
-    }
-
-    #connectBtn.connected {
-      background-color: var(--green);
-      color: white;
-    }
-
-    button {
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    button:hover {
-      transform: scale(1.05);
-    }
-
-    .messages {
-      flex: 1;
-      background-color: var(--bg-panel);
-      border-radius: 12px;
-      padding: 10px;
-      overflow-y: auto;
-      margin-bottom: 10px;
-    }
-
-    .message {
-      margin: 8px 0;
-      padding: 8px 12px;
-      background-color: var(--bg-chat);
-      border-radius: 8px;
-    }
-
-    .message span.name {
-      font-weight: bold;
-      margin-right: 6px;
-    }
-
-    .input-area {
-      display: flex;
-      gap: 10px;
-    }
-
-    .input-area textarea {
-      flex: 1;
-      padding: 10px;
-      border-radius: 8px;
-      resize: none;
-      background-color: var(--bg-panel);
-      color: var(--text-light);
-    }
-
-    .screen-section {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      padding: 20px;
-    }
-
-    .screen-box {
-      flex: 1;
-      background-color: var(--bg-panel);
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 0 10px rgba(0,0,0,0.3);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .fullscreen-btn {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      background: #333;
-      color: #fff;
-      border: none;
-      padding: 5px 10px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 0.8rem;
-    }
-
-    .fullscreen-btn:hover {
-      background: #555;
-    }
-
-    .offline-label {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      color: #ff5555;
-      font-weight: bold;
-      background: rgba(0, 0, 0, 0.7);
-      padding: 6px 12px;
-      border-radius: 10px;
-    }
-
+    header h1 { margin: 0; font-size: 1.5rem; color: white; }
+    .online-users { background: var(--panel-bg); padding: 8px 12px; border-radius: 8px; }
+    .online-users h3 { margin: 0 0 6px; font-size: 0.95rem; color: var(--green); }
+    .online-users ul { display: flex; flex-wrap: wrap; gap: 10px; list-style: none; margin: 0; padding: 0; }
+    .online-users li { background: #2a2a2a; padding: 4px 10px; border-radius: 6px; font-size: 0.9rem; }
+    .container { flex: 1; display: flex; flex-direction: row; }
+    .chat-section { flex: 2; display: flex; flex-direction: column; padding: 20px; border-right: 1px solid #333; }
+    .connection-bar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; align-items: center; }
+    input, select, button { padding: 8px 12px; border-radius: 8px; border: none; background: #2c2c2c; color: var(--text); }
+    button { cursor: pointer; transition: 0.2s ease; }
+    .connected { background: var(--green); color: white; }
+    .disconnected { background: var(--red); color: white; }
+    .messages { flex: 1; background: var(--panel-bg); border-radius: 12px; padding: 10px; overflow-y: auto; margin-bottom: 10px; }
+    .message { margin: 8px 0; padding: 8px 12px; background: #2a2a2a; border-radius: 8px; }
+    .message .name { font-weight: bold; margin-right: 6px; }
+    .input-area { display: flex; gap: 10px; }
+    textarea { flex: 1; padding: 10px; border-radius: 8px; resize: none; background: var(--panel-bg); color: var(--text); }
+    .screen-section { flex: 1; display: flex; flex-direction: column; gap: 20px; padding: 20px; }
+    .screen-box { flex: 1; background: var(--panel-bg); border-radius: 12px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+    .fullscreen-btn { position: absolute; top: 8px; right: 8px; background: #333; color: #fff; border: none; padding: 5px 10px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; }
+    .offline-label { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #ff5555; font-weight: bold; background: rgba(0, 0, 0, 0.7); padding: 6px 12px; border-radius: 10px; }
     @media (max-width: 768px) {
-      .container {
-        flex-direction: column;
-      }
-
-      .chat-section, .screen-section {
-        flex: none;
-        width: 100%;
-        padding: 10px;
-      }
-
-      .connection-bar, .input-area {
-        flex-direction: column;
-        align-items: stretch;
-      }
+      .container { flex-direction: column; }
+      .chat-section, .screen-section { padding: 10px; width: 100%; }
+      .connection-bar, .input-area { flex-direction: column; align-items: stretch; }
     }
   </style>
 </head>
@@ -237,6 +73,7 @@
         <select id="mic"><option>Standard</option></select>
         <input type="text" id="username" placeholder="Benutzername" />
         <button id="connectBtn" class="disconnected">Verbinden</button>
+        <button id="disconnectBtn" class="disconnected" style="display: none;">Trennen</button>
         <button id="shareScreenBtn">🖥 Bildschirm teilen</button>
       </div>
       <div class="messages" id="messages"></div>
@@ -265,6 +102,7 @@
     const socket = io();
     const usernameInput = document.getElementById('username');
     const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
     const shareScreenBtn = document.getElementById('shareScreenBtn');
     const messages = document.getElementById('messages');
     const userList = document.querySelector('#userList ul');
@@ -285,9 +123,28 @@
       usernameInput.readOnly = true;
       userColor = '#' + Math.floor(Math.random() * 16777215).toString(16);
       socket.emit('join', { username });
-      connectBtn.classList.remove('disconnected');
-      connectBtn.classList.add('connected');
-      connectBtn.textContent = 'Verbunden';
+      connectBtn.style.display = 'none';
+      disconnectBtn.style.display = 'inline-block';
+      disconnectBtn.classList.remove('disconnected');
+      disconnectBtn.classList.add('connected');
+    });
+
+    disconnectBtn.addEventListener('click', () => {
+      socket.disconnect();
+      connectBtn.style.display = 'inline-block';
+      disconnectBtn.style.display = 'none';
+      connectBtn.classList.remove('connected');
+      connectBtn.classList.add('disconnected');
+      connectBtn.textContent = 'Verbinden';
+      usernameInput.readOnly = false;
+      messages.innerHTML = '';
+      userList.innerHTML = '';
+      if (myVideo.srcObject) myVideo.srcObject.getTracks().forEach(t => t.stop());
+      if (remoteVideo.srcObject) remoteVideo.srcObject.getTracks().forEach(t => t.stop());
+      myVideo.style.display = 'none';
+      remoteVideo.style.display = 'none';
+      myOffline.style.display = 'block';
+      remoteOffline.style.display = 'block';
     });
 
     sendBtn.addEventListener('click', () => {
@@ -326,10 +183,7 @@
       try {
         const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
         const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        localStream = new MediaStream([
-          ...displayStream.getVideoTracks(),
-          ...audioStream.getAudioTracks()
-        ]);
+        localStream = new MediaStream([...displayStream.getVideoTracks(), ...audioStream.getAudioTracks()]);
         myVideo.srcObject = localStream;
         myVideo.style.display = 'block';
         myOffline.style.display = 'none';
@@ -337,11 +191,7 @@
         if (users.length === 0) return;
         peer = new RTCPeerConnection();
         localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
-        peer.onicecandidate = e => {
-          if (e.candidate) {
-            socket.emit('ice', { target: users[0].id, candidate: e.candidate });
-          }
-        };
+        peer.onicecandidate = e => { if (e.candidate) socket.emit('ice', { target: users[0].id, candidate: e.candidate }); };
         peer.ontrack = e => {
           remoteVideo.srcObject = e.streams[0];
           remoteVideo.style.display = 'block';
@@ -351,17 +201,13 @@
         await peer.setLocalDescription(offer);
         socket.emit('offer', { target: users[0].id, sdp: offer });
       } catch (err) {
-        alert('Bildschirmfreigabe oder Audio fehlgeschlagen.');
+        alert('Freigabe fehlgeschlagen.');
       }
     });
 
     socket.on('offer', async ({ from, sdp }) => {
       peer = new RTCPeerConnection();
-      peer.onicecandidate = e => {
-        if (e.candidate) {
-          socket.emit('ice', { target: from, candidate: e.candidate });
-        }
-      };
+      peer.onicecandidate = e => { if (e.candidate) socket.emit('ice', { target: from, candidate: e.candidate }); };
       peer.ontrack = e => {
         remoteVideo.srcObject = e.streams[0];
         remoteVideo.style.display = 'block';
@@ -386,7 +232,7 @@
     function toggleFullscreen(id) {
       const elem = document.getElementById(id);
       if (!document.fullscreenElement) {
-        elem.requestFullscreen().catch(err => alert('Vollbild-Fehler: ' + err));
+        elem.requestFullscreen().catch(err => alert('Vollbildfehler: ' + err));
       } else {
         document.exitFullscreen();
       }
