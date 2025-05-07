@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EDMBOOK</title>
+  <style>
+    :root {
+      --green: #4caf50;
+      --red: #f44336;
+      --dark-bg: #121212;
+      --panel-bg: #1e1e1e;
+      --text: #e0e0e0;
+    }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: var(--dark-bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    header {
+      background: var(--panel-bg);
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 { margin: 0; font-size: 1.5rem; color: white; }
+    .online-users { background: var(--panel-bg); padding: 8px 12px; border-radius: 8px; }
+    .online-users h3 { margin: 0 0 6px; font-size: 0.95rem; color: var(--green); }
+    .online-users ul { display: flex; flex-wrap: wrap; gap: 10px; list-style: none; margin: 0; padding: 0; }
+    .online-users li { background: #2a2a2a; padding: 4px 10px; border-radius: 6px; font-size: 0.9rem; }
+    .container { flex: 1; display: flex; flex-direction: row; }
+    .chat-section { flex: 2; display: flex; flex-direction: column; padding: 20px; border-right: 1px solid #333; }
+    .connection-bar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; align-items: center; }
+    input, select, button { padding: 8px 12px; border-radius: 8px; border: none; background: #2c2c2c; color: var(--text); }
+    button { cursor: pointer; transition: 0.2s ease; }
+    .connected { background: var(--green); color: white; }
+    .disconnected { background: var(--red); color: white; }
+    .messages { flex: 1; background: var(--panel-bg); border-radius: 12px; padding: 10px; overflow-y: auto; margin-bottom: 10px; }
+    .message { margin: 8px 0; padding: 8px 12px; background: #2a2a2a; border-radius: 8px; }
+    .message .name { font-weight: bold; margin-right: 6px; }
+    .typing-indicator { font-style: italic; color: #bbb; padding: 2px 0 0 6px; }
+    .input-area { display: flex; gap: 10px; }
+    textarea { flex: 1; padding: 10px; border-radius: 8px; resize: none; background: var(--panel-bg); color: var(--text); }
+    .screen-section { flex: 1; display: flex; flex-direction: column; gap: 20px; padding: 20px; }
+    .screen-box { flex: 1; background: var(--panel-bg); border-radius: 12px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+    .fullscreen-btn { position: absolute; top: 8px; right: 8px; background: #333; color: #fff; border: none; padding: 5px 10px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; }
+    .offline-label { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #ff5555; font-weight: bold; background: rgba(0, 0, 0, 0.7); padding: 6px 12px; border-radius: 6px; }
+    @media (max-width: 768px) {
+      .container { flex-direction: column; }
+      .chat-section, .screen-section { padding: 10px; width: 100%; }
+      .connection-bar, .input-area { flex-direction: column; align-items: stretch; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>EDMBOOK</h1>
+    <div class="online-users" id="userList">
+      <h3>🟢 Online</h3>
+      <ul></ul>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="chat-section">
+      <div class="connection-bar">
+        <label for="mic">Mikrofon:</label>
+        <select id="mic"></select>
+        <input type="text" id="username" placeholder="Benutzername" />
+        <button id="connectBtn" class="disconnected">Verbinden</button>
+        <button id="disconnectBtn" class="disconnected" style="display: none;">Trennen</button>
+        <button id="shareScreenBtn">🖥 Bildschirm teilen</button>
+      </div>
+      <div id="errorMsg" style="display:none;"></div>
+      <div class="messages" id="messages"></div>
+      <div class="typing-indicator" id="typingIndicator" style="display:none;"></div>
+      <div class="input-area">
+        <textarea id="messageInput" rows="2" placeholder="Nachricht eingeben..."></textarea>
+        <button id="sendBtn">Senden</button>
+      </div>
+    </div>
+
+    <div class="screen-section">
+      <div class="screen-box" id="myScreen">
+        <video id="myVideo" autoplay muted style="width: 100%; height: 100%; object-fit: contain; display: none;"></video>
+        <div class="offline-label" id="myOffline">🔴 OFFLINE</div>
+        <button class="fullscreen-btn" onclick="toggleFullscreen('myScreen')">Vollbild</button>
+      </div>
+      <div class="screen-box" id="remoteScreen">
+        <video id="remoteVideo" autoplay style="width: 100%; height: 100%; object-fit: contain; display: none;"></video>
+        <div class="offline-label" id="remoteOffline">🔴 OFFLINE</div>
+        <button class="fullscreen-btn" onclick="toggleFullscreen('remoteScreen')">Vollbild</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // --- Hilfsfunktion gegen XSS ---
+    function escapeHTML(str) {
+      return String(str).replace(/[&<>"']/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[m]));
+    }
+
+    // --- Globale Variablen ---
+    let socket, peer = null, localStream = null, users = [], username = '', userColor = '';
+    const userColors = [
+      '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6',
+      '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3'
+    ];
+    let typingTimeout = null;
+    let typingUsers = new Set();
+
+    // --- UI-Elemente ---
+    const usernameInput = document.getElementById('username');
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    const shareScreenBtn = document.getElementById('shareScreenBtn');
+    const messages = document.getElementById('messages');
+    const userList = document.querySelector('#userList ul');
+    const micSelect = document.getElementById('mic');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const myVideo = document.getElementById('myVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
+    const myOffline = document.getElementById('myOffline');
+    const remoteOffline = document.getElementById('remoteOffline');
+    const errorDiv = document.getElementById('errorMsg');
+    const typingIndicator = document.getElementById('typingIndicator');
+
+    // --- Fehleranzeige ---
+    function showError(msg) {
+      errorDiv.textContent = msg;
+      errorDiv.style.display = 'block';
+      setTimeout(() => { errorDiv.style.display = 'none'; }, 4000);
+    }
+
+    // --- PeerConnection-Erstellung ---
+    function createPeer(targetId) {
+      const pc = new RTCPeerConnection();
+      pc.onicecandidate = e => e.candidate && socket.emit('ice', { target: targetId, candidate: e.candidate });
+      pc.ontrack = e => {
+        remoteVideo.srcObject = e.streams[0];
+        remoteVideo.style.display = 'block';
+        remoteOffline.style.display = 'none';
+      };
+      return pc;
+    }
+
+    // --- Mikrofonliste aktualisieren ---
+    async function updateMicList() {
+      micSelect.innerHTML = '';
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        devices.filter(d => d.kind === 'audioinput').forEach((d, i) => {
+          const opt = document.createElement('option');
+          opt.value = d.deviceId;
+          opt.textContent = d.label || `Mikrofon ${i+1}`;
+          micSelect.appendChild(opt);
+        });
+      } catch (e) {
+        showError('Keine Mikrofone gefunden.');
+      }
+    }
+
+    // --- Socket-Initialisierung ---
+    async function initSocket() {
+      socket = io();
+      socket.on('message', ({ username, text, color }) => {
+        const msg = document.createElement('div');
+        msg.classList.add('message');
+        msg.innerHTML = `<span class="name" style="color:${color}">${escapeHTML(username)}:</span> ${escapeHTML(text)}`;
+        messages.appendChild(msg);
+        messages.scrollTop = messages.scrollHeight;
+        // Optionaler Sound bei Nachricht
+        // playSound('message');
+      });
+      socket.on('users', list => {
+        userList.innerHTML = '';
+        users = list.filter(u => u.name !== username);
+        list.forEach(u => {
+          const li = document.createElement('li');
+          li.textContent = u.name;
+          userList.appendChild(li);
+        });
+      });
+      socket.on('offer', async ({ from, sdp }) => {
+        peer = createPeer(from);
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(t => peer.addTrack(t, stream));
+        await peer.setRemoteDescription(new RTCSessionDescription(sdp));
+        const answer = await peer.createAnswer();
+        await peer.setLocalDescription(answer);
+        socket.emit('answer', { target: from, sdp: answer });
+      });
+      socket.on('answer', ({ sdp }) => {
+        peer && peer.setRemoteDescription(new RTCSessionDescription(sdp));
+      });
+      socket.on('ice', ({ candidate }) => {
+        peer && peer.addIceCandidate(new RTCIceCandidate(candidate));
+      });
+
+      // Tippanzeige anderer Nutzer
+      socket.on('typing', ({ username: typingUser }) => {
+        if (typingUser !== username) {
+          typingUsers.add(typingUser);
+          updateTypingIndicator();
+          // Browser-Benachrichtigung, wenn Fenster nicht aktiv
+          if (document.hidden && Notification.permission === "granted") {
+            new Notification(`${typingUser} schreibt gerade ...`);
+          }
+          // Optionaler Ton beim Schreiben
+          // playSound('typing');
+        }
+        if (typingTimeout) clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+          typingUsers.delete(typingUser);
+          updateTypingIndicator();
+        }, 2000);
+      });
+
+      // Optional: Ton abspielen, wenn jemand neu joint (setzt passendes Event voraus!)
+      socket.on('userJoined', ({ username: joinedUser }) => {
+        if (joinedUser !== username) {
+          // playSound('join');
+        }
+      });
+    }
+
+    function updateTypingIndicator() {
+      if (typingUsers.size > 0) {
+        typingIndicator.textContent = [...typingUsers].join(', ') + ' schreibt...';
+        typingIndicator.style.display = 'block';
+      } else {
+        typingIndicator.style.display = 'none';
+      }
+    }
+
+    // --- Verbinden ---
+    connectBtn.addEventListener('click', async () => {
+      await updateMicList();
+      await initSocket();
+      username = usernameInput.value.trim();
+      if (!username) return showError('Bitte Benutzernamen eingeben.');
+      usernameInput.readOnly = true;
+      userColor = userColors[Math.floor(Math.random() * userColors.length)];
+      socket.emit('join', { username });
+      connectBtn.style.display = 'none';
+      disconnectBtn.style.display = 'inline-block';
+
+      try {
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        localStream = audioStream;
+        if (users.length === 0) return;
+        peer = createPeer(users[0].id);
+        localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        socket.emit('offer', { target: users[0].id, sdp: offer });
+      } catch (err) {
+        showError('Mikrofonzugriff fehlgeschlagen.');
+      }
+    });
+
+    // --- Trennen ---
+    disconnectBtn.addEventListener('click', () => {
+      if (socket) socket.disconnect();
+      connectBtn.style.display = 'inline-block';
+      disconnectBtn.style.display = 'none';
+      usernameInput.readOnly = false;
+      messages.innerHTML = '';
+      userList.innerHTML = '';
+      typingIndicator.style.display = 'none';
+      typingUsers.clear();
+      [myVideo, remoteVideo].forEach(v => {
+        if (v.srcObject) v.srcObject.getTracks().forEach(t => t.stop());
+        v.srcObject = null;
+        v.style.display = 'none';
+      });
+      myOffline.style.display = 'block';
+      remoteOffline.style.display = 'block';
+    });
+
+    // --- Nachricht senden ---
+    sendBtn.addEventListener('click', () => {
+      const text = messageInput.value.trim();
+      if (!text || !username) return;
+      socket.emit('message', { username, text, color: userColor });
+      messageInput.value = '';
+      socket.emit('typing', { username, typing: false });
+    });
+
+    // --- Senden mit Enter ---
+    messageInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendBtn.click();
+      }
+    });
+
+    // --- Tippanzeige beim Tippen ---
+    messageInput.addEventListener('input', () => {
+      if (username && socket) socket.emit('typing', { username, typing: true });
+    });
+
+    // --- Bildschirm teilen ---
+    shareScreenBtn.addEventListener('click', async () => {
+      try {
+        const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        localStream = new MediaStream([...displayStream.getVideoTracks(), ...audioStream.getAudioTracks()]);
+        myVideo.srcObject = localStream;
+        myVideo.style.display = 'block';
+        myOffline.style.display = 'none';
+
+        if (users.length === 0) return;
+        peer = createPeer(users[0].id);
+        localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        socket.emit('offer', { target: users[0].id, sdp: offer });
+      } catch (err) {
+        showError('Bildschirmfreigabe fehlgeschlagen.');
+      }
+    });
+
+    // --- Vollbild ---
+    function toggleFullscreen(id) {
+      const el = document.getElementById(id);
+      if (!document.fullscreenElement) el.requestFullscreen(); else document.exitFullscreen();
+    }
+
+    // --- Benachrichtigungs-Berechtigung ---
+    document.addEventListener('DOMContentLoaded', () => {
+      if (Notification.permission !== "granted") {
+        Notification.requestPermission();
+      }
+    });
+
+    // --- Optional: Sound abspielen ---
+    /*
+    function playSound(type) {
+      // Füge eigene Sounddateien hinzu (mp3/wav im public-Ordner)
+      // Beispiel: /sounds/join.mp3 oder /sounds/typing.mp3
+      let file = '';
+      if (type === 'join') file = '/sounds/join.mp3';
+      if (type === 'typing') file = '/sounds/typing.mp3';
+      if (type === 'message') file = '/sounds/message.mp3';
+      if (file) {
+        const audio = new Audio(file);
+        audio.volume = 0.3;
+        audio.play();
+      }
+    }
+    */
+  </script>
+</body>
+</html>
