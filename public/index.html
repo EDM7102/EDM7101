@@ -15,7 +15,6 @@
       height: 100vh;
       overflow: hidden;
     }
-
     header {
       background-color: #1e1e1e;
       padding: 12px 20px;
@@ -24,26 +23,22 @@
       align-items: center;
       box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
     }
-
     header h1 {
       margin: 0;
       font-size: 1.5rem;
       color: #ffffff;
     }
-
     .online-users {
       background-color: #1e1e1e;
       padding: 8px 12px;
       border-radius: 8px;
       margin-left: 20px;
     }
-
     .online-users h3 {
       margin: 0 0 6px 0;
       font-size: 0.95rem;
       color: #4caf50;
     }
-
     .online-users ul {
       list-style: none;
       padding: 0;
@@ -52,20 +47,17 @@
       gap: 10px;
       flex-wrap: wrap;
     }
-
     .online-users li {
       background-color: #2a2a2a;
       padding: 4px 10px;
       border-radius: 6px;
       font-size: 0.9rem;
     }
-
     .container {
       display: flex;
       flex: 1;
       width: 100%;
     }
-
     .chat-section {
       flex: 2;
       display: flex;
@@ -73,7 +65,6 @@
       padding: 20px;
       border-right: 1px solid #333;
     }
-
     .connection-bar {
       display: flex;
       gap: 10px;
@@ -81,7 +72,6 @@
       align-items: center;
       flex-wrap: wrap;
     }
-
     input, select, button {
       padding: 8px 12px;
       border-radius: 8px;
@@ -91,19 +81,16 @@
       color: #e0e0e0;
       min-width: 150px;
     }
-
     button {
       background-color: #4caf50;
       color: white;
       cursor: pointer;
       transition: all 0.2s ease;
     }
-
     button:hover {
       background-color: #388e3c;
       transform: scale(1.05);
     }
-
     .messages {
       flex: 1;
       background-color: #1e1e1e;
@@ -113,24 +100,20 @@
       margin-bottom: 10px;
       scrollbar-width: thin;
     }
-
     .message {
       margin: 8px 0;
       padding: 8px 12px;
       background-color: #2a2a2a;
       border-radius: 8px;
     }
-
     .message span.name {
       font-weight: bold;
       margin-right: 6px;
     }
-
     .input-area {
       display: flex;
       gap: 10px;
     }
-
     .input-area textarea {
       flex: 1;
       padding: 10px;
@@ -139,7 +122,6 @@
       background-color: #1e1e1e;
       color: #e0e0e0;
     }
-
     .screen-section {
       flex: 1;
       display: flex;
@@ -147,7 +129,6 @@
       gap: 20px;
       padding: 20px;
     }
-
     .screen-box {
       flex: 1;
       background-color: #1e1e1e;
@@ -162,7 +143,6 @@
       box-shadow: 0 0 10px rgba(0,0,0,0.3);
       position: relative;
     }
-
     .fullscreen-btn {
       position: absolute;
       top: 8px;
@@ -175,7 +155,6 @@
       cursor: pointer;
       font-size: 0.8rem;
     }
-
     .fullscreen-btn:hover {
       background: #555;
     }
@@ -208,23 +187,16 @@
 
     <div class="screen-section">
       <div class="screen-box" id="myScreen">
-        <span style="display: inline-flex; align-items: center;">
-          <span style="display:inline-block; width:10px; height:10px; background:#ff5555; border-radius:50%; margin-right:8px;"></span>
-          OFFLINE
-        </span>
+        <span id="myStatus">🔴 OFFLINE</span>
         <button class="fullscreen-btn" onclick="toggleFullscreen('myScreen')">Vollbild</button>
       </div>
       <div class="screen-box" id="remoteScreen">
-        <span style="display: inline-flex; align-items: center;">
-          <span style="display:inline-block; width:10px; height:10px; background:#ff5555; border-radius:50%; margin-right:8px;"></span>
-          OFFLINE
-        </span>
+        <span id="remoteStatus">🔴 OFFLINE</span>
         <button class="fullscreen-btn" onclick="toggleFullscreen('remoteScreen')">Vollbild</button>
       </div>
     </div>
   </div>
 
-  <!-- Client-Skripte -->
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
@@ -236,17 +208,20 @@
     const micSelect = document.getElementById('mic');
     const messageInput = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendBtn');
+    const myScreen = document.getElementById('myScreen');
+    const remoteScreen = document.getElementById('remoteScreen');
+    const myStatus = document.getElementById('myStatus');
+    const remoteStatus = document.getElementById('remoteStatus');
 
-    let username = '';
-    let userColor = '';
+    let username = '', userColor = '', localStream = null, peer = null;
+    let users = [];
 
     function randomColor() {
       const colors = ['#f44336', '#e91e63', '#9c27b0', '#3f51b5', '#03a9f4', '#009688', '#4caf50', '#ff9800'];
       return colors[Math.floor(Math.random() * colors.length)];
     }
 
-    // Benutzername sperren nach Enter
-    usernameInput.addEventListener('keydown', function (e) {
+    usernameInput.addEventListener('keydown', e => {
       if (e.key === 'Enter') {
         e.preventDefault();
         usernameInput.readOnly = true;
@@ -268,7 +243,7 @@
       messageInput.value = '';
     });
 
-    messageInput.addEventListener('keydown', function (e) {
+    messageInput.addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         sendBtn.click();
@@ -283,31 +258,98 @@
       messages.scrollTop = messages.scrollHeight;
     });
 
-    socket.on('users', users => {
+    socket.on('users', list => {
       userList.innerHTML = '';
-      users.forEach(name => {
+      users = list.filter(u => u.name !== username);
+      list.forEach(u => {
         const li = document.createElement('li');
-        li.textContent = name;
+        li.textContent = u.name;
         userList.appendChild(li);
       });
     });
 
     shareScreenBtn.addEventListener('click', async () => {
       try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        localStream = stream;
+        myScreen.innerHTML = '';
         const video = document.createElement('video');
         video.srcObject = stream;
         video.autoplay = true;
+        video.muted = true;
         video.style.width = '100%';
         video.style.height = '100%';
-        video.style.objectFit = 'contain';
-        const screenBox = document.getElementById('myScreen');
-        screenBox.innerHTML = '';
-        screenBox.appendChild(video);
-        screenBox.appendChild(createFullscreenButton('myScreen'));
+        myScreen.appendChild(video);
+        myStatus.textContent = '🟢 ONLINE';
+
+        if (users.length > 0) {
+          startConnection(users[0].id);
+        }
       } catch (err) {
         alert('Bildschirmfreigabe fehlgeschlagen.');
       }
+    });
+
+    function startConnection(targetId) {
+      peer = new RTCPeerConnection();
+      localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
+
+      peer.onicecandidate = e => {
+        if (e.candidate) {
+          socket.emit('ice', { target: targetId, candidate: e.candidate });
+        }
+      };
+
+      peer.ontrack = e => {
+        remoteScreen.innerHTML = '';
+        const remoteVideo = document.createElement('video');
+        remoteVideo.srcObject = e.streams[0];
+        remoteVideo.autoplay = true;
+        remoteVideo.style.width = '100%';
+        remoteVideo.style.height = '100%';
+        remoteScreen.appendChild(remoteVideo);
+        remoteStatus.textContent = '🟢 ONLINE';
+      };
+
+      peer.createOffer().then(offer => {
+        peer.setLocalDescription(offer);
+        socket.emit('offer', { target: targetId, sdp: offer });
+      });
+    }
+
+    socket.on('offer', async ({ from, sdp }) => {
+      peer = new RTCPeerConnection();
+      peer.onicecandidate = e => {
+        if (e.candidate) {
+          socket.emit('ice', { target: from, candidate: e.candidate });
+        }
+      };
+
+      peer.ontrack = e => {
+        remoteScreen.innerHTML = '';
+        const remoteVideo = document.createElement('video');
+        remoteVideo.srcObject = e.streams[0];
+        remoteVideo.autoplay = true;
+        remoteVideo.style.width = '100%';
+        remoteVideo.style.height = '100%';
+        remoteScreen.appendChild(remoteVideo);
+        remoteStatus.textContent = '🟢 ONLINE';
+      };
+
+      await peer.setRemoteDescription(new RTCSessionDescription(sdp));
+      const stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+      stream.getTracks().forEach(track => peer.addTrack(track, stream));
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+      socket.emit('answer', { target: from, sdp: answer });
+    });
+
+    socket.on('answer', ({ sdp }) => {
+      peer.setRemoteDescription(new RTCSessionDescription(sdp));
+    });
+
+    socket.on('ice', ({ candidate }) => {
+      peer.addIceCandidate(new RTCIceCandidate(candidate));
     });
 
     function toggleFullscreen(id) {
@@ -317,14 +359,6 @@
       } else {
         document.exitFullscreen();
       }
-    }
-
-    function createFullscreenButton(id) {
-      const btn = document.createElement('button');
-      btn.className = 'fullscreen-btn';
-      btn.textContent = 'Vollbild';
-      btn.onclick = () => toggleFullscreen(id);
-      return btn;
     }
 
     navigator.mediaDevices.enumerateDevices().then(devices => {
