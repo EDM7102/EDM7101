@@ -1,2 +1,341 @@
 <!DOCTYPE html>
-<html><head><title>EDMBOOK</title></head><body>EDMBOOK Chat HTML (gekürzt)</body></html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EDMBOOK</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #121212;
+      color: #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      background-color: #1e1e1e;
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 1.5rem;
+      color: #ffffff;
+    }
+
+    .online-users {
+      background-color: #1e1e1e;
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin-left: 20px;
+    }
+
+    .online-users h3 {
+      margin: 0 0 6px 0;
+      font-size: 0.95rem;
+      color: #4caf50;
+    }
+
+    .online-users ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .online-users li {
+      background-color: #2a2a2a;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+
+    .container {
+      display: flex;
+      flex: 1;
+      width: 100%;
+    }
+
+    .chat-section {
+      flex: 2;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      border-right: 1px solid #333;
+    }
+
+    .connection-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    input, select, button {
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: none;
+      outline: none;
+      background-color: #2c2c2c;
+      color: #e0e0e0;
+      min-width: 150px;
+    }
+
+    button {
+      background-color: #4caf50;
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    button:hover {
+      background-color: #388e3c;
+      transform: scale(1.05);
+    }
+
+    .messages {
+      flex: 1;
+      background-color: #1e1e1e;
+      border-radius: 12px;
+      padding: 10px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+      scrollbar-width: thin;
+    }
+
+    .message {
+      margin: 8px 0;
+      padding: 8px 12px;
+      background-color: #2a2a2a;
+      border-radius: 8px;
+    }
+
+    .message span.name {
+      font-weight: bold;
+      margin-right: 6px;
+    }
+
+    .input-area {
+      display: flex;
+      gap: 10px;
+    }
+
+    .input-area textarea {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      resize: none;
+      background-color: #1e1e1e;
+      color: #e0e0e0;
+    }
+
+    .screen-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      padding: 20px;
+    }
+
+    .screen-box {
+      flex: 1;
+      background-color: #1e1e1e;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ff5555;
+      font-weight: bold;
+      font-size: 1.2rem;
+      text-transform: uppercase;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      position: relative;
+    }
+
+    .fullscreen-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: #333;
+      color: #fff;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+
+    .fullscreen-btn:hover {
+      background: #555;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>EDMBOOK</h1>
+    <div class="online-users" id="userList">
+      <h3>🟢 Online</h3>
+      <ul></ul>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="chat-section">
+      <div class="connection-bar">
+        <label for="mic">Mikrofon:</label>
+        <select id="mic"><option>Standard</option></select>
+        <input type="text" id="username" placeholder="Benutzername" />
+        <button id="connectBtn">Verbinden</button>
+        <button id="shareScreenBtn">🖥 Bildschirm teilen</button>
+      </div>
+      <div class="messages" id="messages"></div>
+      <div class="input-area">
+        <textarea id="messageInput" rows="2" placeholder="Nachricht eingeben..."></textarea>
+        <button id="sendBtn">Senden</button>
+      </div>
+    </div>
+
+    <div class="screen-section">
+      <div class="screen-box" id="myScreen">
+        <span style="display: inline-flex; align-items: center;">
+          <span style="display:inline-block; width:10px; height:10px; background:#ff5555; border-radius:50%; margin-right:8px;"></span>
+          OFFLINE
+        </span>
+        <button class="fullscreen-btn" onclick="toggleFullscreen('myScreen')">Vollbild</button>
+      </div>
+      <div class="screen-box" id="remoteScreen">
+        <span style="display: inline-flex; align-items: center;">
+          <span style="display:inline-block; width:10px; height:10px; background:#ff5555; border-radius:50%; margin-right:8px;"></span>
+          OFFLINE
+        </span>
+        <button class="fullscreen-btn" onclick="toggleFullscreen('remoteScreen')">Vollbild</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Client-Skripte -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const usernameInput = document.getElementById('username');
+    const connectBtn = document.getElementById('connectBtn');
+    const shareScreenBtn = document.getElementById('shareScreenBtn');
+    const messages = document.getElementById('messages');
+    const userList = document.querySelector('#userList ul');
+    const micSelect = document.getElementById('mic');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+
+    let username = '';
+    let userColor = '';
+
+    function randomColor() {
+      const colors = ['#f44336', '#e91e63', '#9c27b0', '#3f51b5', '#03a9f4', '#009688', '#4caf50', '#ff9800'];
+      return colors[Math.floor(Math.random() * colors.length)];
+    }
+
+    // Benutzername sperren nach Enter
+    usernameInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        usernameInput.readOnly = true;
+      }
+    });
+
+    connectBtn.addEventListener('click', () => {
+      username = usernameInput.value.trim();
+      if (!username) return alert('Bitte Benutzernamen eingeben.');
+      usernameInput.readOnly = true;
+      userColor = randomColor();
+      socket.emit('join', { username });
+    });
+
+    sendBtn.addEventListener('click', () => {
+      const text = messageInput.value.trim();
+      if (!text) return;
+      socket.emit('message', { username, text, color: userColor });
+      messageInput.value = '';
+    });
+
+    messageInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendBtn.click();
+      }
+    });
+
+    socket.on('message', ({ username, text, color }) => {
+      const msg = document.createElement('div');
+      msg.classList.add('message');
+      msg.innerHTML = `<span class="name" style="color:${color}">${username}:</span> ${text}`;
+      messages.appendChild(msg);
+      messages.scrollTop = messages.scrollHeight;
+    });
+
+    socket.on('users', users => {
+      userList.innerHTML = '';
+      users.forEach(name => {
+        const li = document.createElement('li');
+        li.textContent = name;
+        userList.appendChild(li);
+      });
+    });
+
+    shareScreenBtn.addEventListener('click', async () => {
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        video.autoplay = true;
+        video.style.width = '100%';
+        video.style.height = '100%';
+        video.style.objectFit = 'contain';
+        const screenBox = document.getElementById('myScreen');
+        screenBox.innerHTML = '';
+        screenBox.appendChild(video);
+        screenBox.appendChild(createFullscreenButton('myScreen'));
+      } catch (err) {
+        alert('Bildschirmfreigabe fehlgeschlagen.');
+      }
+    });
+
+    function toggleFullscreen(id) {
+      const elem = document.getElementById(id);
+      if (!document.fullscreenElement) {
+        elem.requestFullscreen().catch(err => alert('Vollbild-Fehler: ' + err));
+      } else {
+        document.exitFullscreen();
+      }
+    }
+
+    function createFullscreenButton(id) {
+      const btn = document.createElement('button');
+      btn.className = 'fullscreen-btn';
+      btn.textContent = 'Vollbild';
+      btn.onclick = () => toggleFullscreen(id);
+      return btn;
+    }
+
+    navigator.mediaDevices.enumerateDevices().then(devices => {
+      const audioInputs = devices.filter(d => d.kind === 'audioinput');
+      audioInputs.forEach(device => {
+        const opt = document.createElement('option');
+        opt.value = device.deviceId;
+        opt.textContent = device.label || 'Mikrofon ' + micSelect.length;
+        micSelect.appendChild(opt);
+      });
+    });
+  </script>
+</body>
+</html>
