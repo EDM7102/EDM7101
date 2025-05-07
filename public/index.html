@@ -187,10 +187,12 @@
 
     <div class="screen-section">
       <div class="screen-box" id="myScreen">
+        <video id="myVideo" autoplay muted style="width: 100%; height: 100%; object-fit: contain; display: none;"></video>
         <span id="myStatus">🔴 OFFLINE</span>
         <button class="fullscreen-btn" onclick="toggleFullscreen('myScreen')">Vollbild</button>
       </div>
       <div class="screen-box" id="remoteScreen">
+        <video id="remoteVideo" autoplay style="width: 100%; height: 100%; object-fit: contain; display: none;"></video>
         <span id="remoteStatus">🔴 OFFLINE</span>
         <button class="fullscreen-btn" onclick="toggleFullscreen('remoteScreen')">Vollbild</button>
       </div>
@@ -208,39 +210,25 @@
     const micSelect = document.getElementById('mic');
     const messageInput = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendBtn');
-    const myScreen = document.getElementById('myScreen');
-    const remoteScreen = document.getElementById('remoteScreen');
+    const myVideo = document.getElementById('myVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
     const myStatus = document.getElementById('myStatus');
     const remoteStatus = document.getElementById('remoteStatus');
 
-    let username = '', userColor = '', localStream = null, peer = null;
+    let username = '', userColor = '', peer = null, localStream = null;
     let users = [];
-
-    function randomColor() {
-      const colors = ['#f44336', '#e91e63', '#9c27b0', '#3f51b5', '#03a9f4', '#009688', '#4caf50', '#ff9800'];
-      return colors[Math.floor(Math.random() * colors.length)];
-    }
-
-    usernameInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        usernameInput.readOnly = true;
-      }
-    });
 
     connectBtn.addEventListener('click', () => {
       username = usernameInput.value.trim();
       if (!username) return alert('Bitte Benutzernamen eingeben.');
       usernameInput.readOnly = true;
-      userColor = randomColor();
+      userColor = '#' + Math.floor(Math.random()*16777215).toString(16);
       socket.emit('join', { username });
-      connectBtn.disabled = true;
     });
 
     sendBtn.addEventListener('click', () => {
       const text = messageInput.value.trim();
-      if (!text) return;
-      if (!username) return alert('Bitte zuerst verbinden!');
+      if (!text || !username) return;
       socket.emit('message', { username, text, color: userColor });
       messageInput.value = '';
     });
@@ -268,6 +256,68 @@
         li.textContent = u.name;
         userList.appendChild(li);
       });
+    });
+
+    shareScreenBtn.addEventListener('click', async () => {
+      try {
+        localStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        myVideo.srcObject = localStream;
+        myVideo.style.display = 'block';
+        myStatus.textContent = '🟢 ONLINE';
+
+        if (users.length === 0) return;
+        peer = new RTCPeerConnection();
+
+        localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
+
+        peer.onicecandidate = e => {
+          if (e.candidate) {
+            socket.emit('ice', { target: users[0].id, candidate: e.candidate });
+          }
+        };
+
+        peer.createOffer().then(offer => {
+          peer.setLocalDescription(offer);
+          socket.emit('offer', { target: users[0].id, sdp: offer });
+        });
+
+        peer.ontrack = e => {
+          remoteVideo.srcObject = e.streams[0];
+          remoteVideo.style.display = 'block';
+          remoteStatus.textContent = '🟢 ONLINE';
+        };
+      } catch (err) {
+        alert('Bildschirmfreigabe fehlgeschlagen.');
+      }
+    });
+
+    socket.on('offer', async ({ from, sdp }) => {
+      peer = new RTCPeerConnection();
+
+      peer.onicecandidate = e => {
+        if (e.candidate) {
+          socket.emit('ice', { target: from, candidate: e.candidate });
+        }
+      };
+
+      peer.ontrack = e => {
+        remoteVideo.srcObject = e.streams[0];
+        remoteVideo.style.display = 'block';
+        remoteStatus.textContent = '🟢 ONLINE';
+      };
+
+      await peer.setRemoteDescription(new RTCSessionDescription(sdp));
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+      socket.emit('answer', { target: from, sdp: answer });
+    });
+
+    socket.on('answer', ({ sdp }) => {
+      peer.setRemoteDescription(new RTCSessionDescription(sdp));
+    });
+
+    socket.on('ice', ({ candidate }) => {
+      peer.addIceCandidate(new RTCIceCandidate(candidate));
     });
 
     function toggleFullscreen(id) {
