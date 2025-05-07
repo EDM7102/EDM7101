@@ -68,11 +68,6 @@ function createPeer(targetId) {
     remoteVideo.style.display = 'block';
     remoteOffline.style.display = 'none';
   };
-
-  // Füge alle lokalen Tracks (Audio und Video) zur PeerConnection hinzu
-  if (localStream) {
-    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-  }
   return pc;
 }
 
@@ -96,8 +91,8 @@ async function updateMicList() {
 async function initializeAudio() {
   try {
     const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    localStream = localStream || new MediaStream();
-    audioStream.getTracks().forEach(track => localStream.addTrack(track));
+    localStream = new MediaStream();
+    audioStream.getTracks().forEach((track) => localStream.addTrack(track));
   } catch (error) {
     console.error("Fehler bei der Initialisierung des Audio-Streams:", error);
     showError("Mikrofonzugriff fehlgeschlagen.");
@@ -136,18 +131,38 @@ async function initSocket() {
   socket.on('ice', ({ candidate }) => {
     peer && peer.addIceCandidate(new RTCIceCandidate(candidate));
   });
+
+  socket.on('typing', ({ username: typingUser }) => {
+    if (typingUser !== username) {
+      typingUsers.add(typingUser);
+      updateTypingIndicator();
+      playNotifSound();
+    }
+    if (typingTimeout) clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+      typingUsers.delete(typingUser);
+      updateTypingIndicator();
+    }, 2000);
+  });
+
+  socket.on('joinError', ({ message }) => {
+    showError(message);
+    setConnectionStatus(false);
+    socket.disconnect();
+  });
 }
 
-// --- Nachrichten einfügen ---
+// --- Nachrichten & Dateien einfügen mit Animation ---
 function appendMessage(uname, text, color) {
   const msg = document.createElement('div');
   msg.classList.add('message');
   if (uname === username) msg.classList.add('me');
   msg.innerHTML = `<span class="name" style="color:${color}">${escapeHTML(uname)}:</span> ${escapeHTML(text)}`;
   messages.appendChild(msg);
+  msg.style.opacity = "0";
+  setTimeout(()=>msg.style.opacity = "1", 20);
   messages.scrollTop = messages.scrollHeight;
 }
-
 function appendFileMessage(uname, fileName, fileType, fileData, color) {
   const msg = document.createElement('div');
   msg.classList.add('message');
@@ -160,13 +175,37 @@ function appendFileMessage(uname, fileName, fileType, fileData, color) {
   }
   msg.innerHTML = content;
   messages.appendChild(msg);
+  msg.style.opacity = "0";
+  setTimeout(()=>msg.style.opacity = "1", 20);
   messages.scrollTop = messages.scrollHeight;
+}
+
+// --- Nutzerliste animieren ---
+function updateUserList(list) {
+  userList.innerHTML = '';
+  list.forEach(u => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="user-dot"></span> ${escapeHTML(u.name)}`;
+    userList.appendChild(li);
+  });
+}
+
+function updateTypingIndicator() {
+  if (typingUsers.size > 0) {
+    typingIndicator.textContent = [...typingUsers].join(', ') + ' schreibt...';
+    typingIndicator.style.display = 'block';
+  } else {
+    typingIndicator.style.display = 'none';
+  }
 }
 
 // --- Benutzername aus LocalStorage laden ---
 document.addEventListener('DOMContentLoaded', () => {
   const savedName = localStorage.getItem('username');
   if (savedName) usernameInput.value = savedName;
+  if (Notification.permission !== "granted") {
+    Notification.requestPermission();
+  }
 });
 
 // --- Verbinden ---
@@ -175,25 +214,130 @@ connectBtn.addEventListener('click', async () => {
   await initializeAudio();
   await initSocket();
   username = usernameInput.value.trim();
-  if (!username) return showError('Bitte Benutzernamen eingeben.');
   localStorage.setItem('username', username);
+  if (!username) return showError('Bitte Benutzernamen eingeben.');
+  usernameInput.readOnly = true;
+  userColor = userColors[Math.floor(Math.random() * userColors.length)];
+  socket.emit('join', { username });
+  connectBtn.style.display = 'none';
+  disconnectBtn.style.display = 'inline-block';
+  setConnectionStatus(true);
 
-  if (users.length > 0) {
+  try {
+    if (users.length === 0) return;
     peer = createPeer(users[0].id);
+    if (localStream) localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
     socket.emit('offer', { target: users[0].id, sdp: offer });
+  } catch (err) {
+    showError('Mikrofonzugriff fehlgeschlagen.');
   }
+});
+
+// --- Trennen ---
+disconnectBtn.addEventListener('click', () => {
+  if (socket) socket.disconnect();
+  connectBtn.style.display = 'inline-block';
+  disconnectBtn.style.display = 'none';
+  usernameInput.readOnly = false;
+  messages.innerHTML = '';
+  userList.innerHTML = '';
+  typingIndicator.style.display = 'none';
+  typingUsers.clear();
+  [myVideo, remoteVideo].forEach(v => {
+    if (v.srcObject) v.srcObject.getTracks().forEach(t => t.stop());
+    v.srcObject = null;
+    v.style.display = 'none';
+  });
+  myOffline.style.display = 'block';
+  remoteOffline.style.display = 'block';
+  setConnectionStatus(false);
+  peer = null;
+});
+
+// --- Nachricht senden ---
+sendBtn.addEventListener('click', () => {
+  const text = messageInput.value.trim();
+  if (!text || !username) return;
+  socket.emit('message', { username, text, color: userColor });
+  messageInput.value = '';
+  socket.emit('typing', { username, typing: false });
+});
+
+// --- Senden mit Enter ---
+messageInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendBtn.click();
+  }
+});
+
+// --- Tippanzeige beim Tippen ---
+messageInput.addEventListener('input', () => {
+  if (username && socket) socket.emit('typing', { username, typing: true });
+});
+
+// --- Datei-Upload ---
+fileInput.addEventListener('change', () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) {
+    showError('Datei zu groß (max. 5MB).');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    socket.emit('file', {
+      username,
+      fileName: file.name,
+      fileType: file.type,
+      fileData: e.target.result,
+      color: userColor
+    });
+  };
+  reader.readAsDataURL(file);
+  fileInput.value = '';
+});
+
+// --- Datei-Auswahl öffnen per Klick auf Büroklammer ---
+document.querySelector('.file-upload-label').addEventListener('click', () => {
+  fileInput.click();
 });
 
 // --- Bildschirm teilen ---
 shareScreenBtn.addEventListener('click', async () => {
   try {
     const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-    localStream.getVideoTracks().forEach(track => localStream.removeTrack(track));
-    displayStream.getVideoTracks().forEach(track => localStream.addTrack(track));
+    localStream.getVideoTracks().forEach(track => {
+      localStream.removeTrack(track);
+      if (peer) {
+        const senders = peer.getSenders().filter(s => s.track && s.track.kind === 'video');
+        senders.forEach(sender => peer.removeTrack(sender));
+      }
+    });
+    displayStream.getVideoTracks().forEach(track => {
+      localStream.addTrack(track);
+      if (peer) {
+        peer.addTrack(track, localStream);
+      }
+    });
     myVideo.srcObject = new MediaStream([...displayStream.getVideoTracks(), ...localStream.getAudioTracks()]);
+    myVideo.style.display = 'block';
+    myOffline.style.display = 'none';
+
+    if (peer && users.length > 0) {
+      const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
+      socket.emit('offer', { target: users[0].id, sdp: offer });
+    }
   } catch (err) {
     showError('Bildschirmfreigabe fehlgeschlagen.');
   }
 });
+
+// --- Vollbild ---
+window.toggleFullscreen = function(id) {
+  const el = document.getElementById(id);
+  if (!document.fullscreenElement) el.requestFullscreen(); else document.exitFullscreen();
+};
