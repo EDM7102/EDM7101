@@ -1,559 +1,964 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>EDMBOOK</title>
-  <style>
-    :root {
-      --green: #4caf50;
-      --red: #f44336;
-      --dark-bg: #121212;
-      --panel-bg: #1e1e1e;
-      --text: #e0e0e0;
-      --primary: #395B64;
-      --primary-dark: #2c4248;
-      --bubble-me: #395B64;
-      --bubble: #292929;
-    }
-    body {
-      margin: 0;
-      font-family: 'Segoe UI', sans-serif;
-      background: var(--dark-bg);
-      color: var(--text);
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-    header {
-      background: var(--panel-bg);
-      padding: 12px 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    header h1 { margin: 0; font-size: 1.5rem; color: white; }
-    #connectionStatus {
-      display: inline-block;
-      padding: 6px 18px;
-      border-radius: 22px;
-      font-weight: bold;
-      margin-left: 10px;
-      font-size: 1.1rem;
-      transition: background 0.3s, color 0.3s;
-    }
-    #connectionStatus.connected {
-      background: var(--green);
-      color: #fff;
-    }
-    #connectionStatus.disconnected {
-      background: var(--red);
-      color: #fff;
-    }
-    .online-users { background: var(--panel-bg); padding: 8px 12px; border-radius: 8px; }
-    .online-users h3 { margin: 0 0 6px; font-size: 0.95rem; color: var(--green); }
-    .online-users ul { display: flex; flex-wrap: wrap; gap: 10px; list-style: none; margin: 0; padding: 0; }
-    .online-users li {
-      background: #2a2a2a; padding: 4px 10px; border-radius: 50px; font-size: 0.93rem;
-      display: flex; align-items: center; gap: 6px;
-      opacity: 0; transform: translateY(10px) scale(0.95);
-      animation: userAppear 0.5s forwards;
-    }
-    @keyframes userAppear {
-      to { opacity: 1; transform: translateY(0) scale(1);}
-    }
-    .user-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); display: inline-block;}
-    .container { flex: 1; display: flex; flex-direction: row; }
-    .chat-section { flex: 2; display: flex; flex-direction: column; padding: 20px; border-right: 1px solid #333; }
-    .connection-bar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; align-items: center; }
-    input, select, button {
-      padding: 8px 12px; border-radius: 8px; border: none; background: #2c2c2c; color: var(--text);
-      font-size: 1rem;
-      transition: box-shadow 0.2s, border 0.2s, background 0.2s, color 0.2s;
-    }
-    button, #shareScreenBtn, #sendBtn {
-      background: #2c2c2c;
-      color: var(--text);
-      box-shadow: 0 2px 8px #0002;
-      font-weight: 500;
-      cursor: pointer;
-    }
-    button:hover, #shareScreenBtn:hover, #sendBtn:hover,
-    button:focus, #shareScreenBtn:focus, #sendBtn:focus {
-      background: #444;
-      color: #fff;
-      transform: translateY(-2px) scale(1.03);
-      box-shadow: 0 4px 20px #0004;
-    }
-    button:active, #shareScreenBtn:active, #sendBtn:active {
-      transform: scale(0.97);
-      background: #222b;
-    }
-    .connected { background: var(--green)!important; color: white!important;}
-    .disconnected { background: var(--red)!important; color: white!important;}
-    .messages {
-      flex: 1; background: var(--panel-bg); border-radius: 12px; padding: 10px; overflow-y: auto; margin-bottom: 10px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.15);
-      scrollbar-color: #888 #222;
-      display: flex; flex-direction: column;
-    }
-    .message {
-      background: var(--bubble);
-      border-radius: 14px;
-      margin: 8px 0;
-      padding: 8px 15px;
-      min-width: 60px;
-      max-width: 80%;
-      word-break: break-word;
-      animation: fadeInMsg 0.3s;
-      opacity: 0;
-      animation-fill-mode: forwards;
-      animation-delay: 0.07s;
-      box-shadow: 0 1px 4px #0003;
-      position: relative;
-    }
-    @keyframes fadeInMsg {
-      from { opacity: 0; transform: translateY(25px);}
-      to { opacity: 1; transform: translateY(0);}
-    }
-    .message.me {
-      background: var(--bubble-me);
-      color: #eaffff;
-      align-self: flex-end;
-      margin-right: 2px;
-      font-weight: 500;
-      box-shadow: 0 2px 10px #395B64aa;
-    }
-    .message .name { font-weight: bold; margin-right: 6px; }
-    .typing-indicator { font-style: italic; color: #bbb; padding: 2px 0 0 6px; }
-    .input-area { display: flex; gap: 10px; align-items: flex-end; }
-    textarea { flex: 1; padding: 10px; border-radius: 8px; resize: none; background: var(--panel-bg); color: var(--text); min-height: 40px; border: 1.5px solid #23272b;}
-    textarea:focus { border: 2px solid var(--primary); outline: none; background: #23272b;}
-    .file-upload-label {
-      display: inline-flex;
-      align-items: center;
-      cursor: pointer;
-      font-size: 1.3em;
-      margin-right: 4px;
-      transition: color 0.2s;
-    }
-    .file-upload-label:hover { color: var(--green); }
-    #fileInput { display: none; }
-    .screen-section { flex: 1; display: flex; flex-direction: column; gap: 20px; padding: 20px; }
-    .screen-box { flex: 1; background: var(--panel-bg); border-radius: 12px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
-    .fullscreen-btn { position: absolute; top: 8px; right: 8px; background: #333; color: #fff; border: none; padding: 5px 10px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; }
-    .offline-label { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #ff5555; font-weight: bold; background: rgba(0, 0, 0, 0.7); padding: 6px 12px; border-radius: 6px; }
-    .file-attachment { display: flex; align-items: center; gap: 8px; }
-    .file-attachment img { max-width: 150px; max-height: 150px; border-radius: 6px; vertical-align: middle; }
-    #errorMsg { display: none; background: #f44336; color: #fff; padding: 10px; margin-bottom: 8px; border-radius: 8px; text-align: center;}
-    @media (max-width: 768px) {
-      .container { flex-direction: column; }
-      .chat-section, .screen-section { padding: 10px; width: 100%; }
-      .connection-bar, .input-area { flex-direction: column; align-items: stretch; }
-      #connectionStatus { margin: 10px 0 0 0; }
-    }
-  </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EDMBOOK Refined</title>
+    <style>
+        :root {
+            --green: #4caf50;
+            --red: #f44336;
+            --blue: #2196F3;
+            --dark-bg: #121212;
+            --panel-bg: #1e1e1e;
+            --text: #e0e0e0;
+            --text-darker: #b0b0b0;
+            --primary: #395B64; /* Beibehalten von deinem Farbschema */
+            --primary-dark: #2c4248;
+            --bubble-me: var(--primary);
+            --bubble: #292929;
+            --input-bg: #2c2c2c;
+            --border-color: #333;
+            --shadow-light: rgba(0,0,0,0.2);
+            --shadow-strong: rgba(0,0,0,0.4);
+            --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            font-family: var(--font-family);
+            background: var(--dark-bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden; /* Verhindert Scrollen des Body bei modalen Inhalten */
+        }
+
+        header {
+            background: var(--panel-bg);
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: 0 2px 5px var(--shadow-light);
+        }
+
+        header h1 { margin: 0; font-size: 1.6rem; color: white; letter-spacing: 1px; }
+
+        .status-indicator {
+            display: inline-flex; /* Geändert für bessere Ausrichtung */
+            align-items: center;
+            gap: 8px; /* Abstand zwischen Icon und Text */
+            padding: 7px 18px;
+            border-radius: 22px;
+            font-weight: bold;
+            font-size: 1.05rem; /* Etwas angepasst */
+            transition: background 0.3s, color 0.3s;
+        }
+        .status-indicator::before { /* Pseudo-Element für den Punkt */
+            content: '';
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            background-color: currentColor; /* Nimmt Farbe vom Text */
+            margin-right: 2px; /* Kleiner Abstand zum Text */
+        }
+        .status-indicator.connected { background: var(--green); color: #fff; }
+        .status-indicator.disconnected { background: var(--red); color: #fff; }
+        .status-indicator.connecting { background: var(--blue) ; color: #fff;}
+
+
+        .online-users { background: var(--panel-bg); padding: 8px 12px; border-radius: 8px; }
+        .online-users h3 { margin: 0 0 8px; font-size: 0.95rem; color: var(--green); display: flex; align-items: center; gap: 6px;}
+        .online-users h3::before { content: '🟢'; font-size: 0.8em; }
+        .online-users ul { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
+        .online-users li {
+            background: #2a2a2a; padding: 5px 12px; border-radius: 15px; font-size: 0.9rem;
+            display: flex; align-items: center; gap: 6px;
+            opacity: 0; transform: translateY(10px) scale(0.95);
+            animation: userAppear 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        @keyframes userAppear {
+            to { opacity: 1; transform: translateY(0) scale(1);}
+        }
+        .user-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block; }
+
+        .container { flex: 1; display: flex; flex-direction: row; overflow: hidden; /* Wichtig für internes Scrolling */ }
+
+        .chat-section { flex: 2; display: flex; flex-direction: column; padding: 20px; border-right: 1px solid var(--border-color); overflow: hidden; }
+        .connection-bar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; align-items: center; }
+
+        input[type="text"], select, button {
+            padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text);
+            font-size: 1rem;
+            transition: box-shadow 0.2s, border-color 0.2s, background 0.2s;
+        }
+        input[type="text"]:focus, select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px var(--primary-dark);
+            outline: none;
+        }
+
+        button {
+            background: var(--primary-dark); color: white; box-shadow: 0 2px 8px var(--shadow-light);
+            font-weight: 500; cursor: pointer; border: 1px solid var(--primary);
+        }
+        button:hover, button:focus {
+            background: var(--primary); color: #fff;
+            transform: translateY(-1px); box-shadow: 0 4px 12px var(--shadow-strong);
+        }
+        button:active { transform: scale(0.98); background: var(--primary-dark); }
+        button.action-btn { background: var(--green); border-color: var(--green); }
+        button.action-btn:hover { background-color: #388E3C; }
+        button.danger-btn { background: var(--red); border-color: var(--red); }
+        button.danger-btn:hover { background-color: #D32F2F; }
+
+        .messages {
+            flex: 1; background: var(--panel-bg); border-radius: 12px; padding: 15px; overflow-y: auto; margin-bottom: 15px;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.2);
+            scrollbar-color: #555 #222; scrollbar-width: thin;
+            display: flex; flex-direction: column; gap: 10px; /* Abstand zwischen Nachrichten */
+        }
+        .message {
+            background: var(--bubble); border-radius: 18px; padding: 10px 18px;
+            max-width: 75%; word-break: break-word;
+            opacity: 0; animation: fadeInMsg 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+            animation-delay: 0.05s; box-shadow: 0 1px 3px var(--shadow-light);
+            position: relative;
+        }
+        @keyframes fadeInMsg {
+            from { opacity: 0; transform: translateY(20px) scale(0.98);}
+            to { opacity: 1; transform: translateY(0) scale(1);}
+        }
+        .message.me {
+            background: var(--bubble-me); color: #eaffff; align-self: flex-end;
+            font-weight: 500; box-shadow: 0 2px 6px #395B6499;
+        }
+        .message .name { font-weight: bold; margin-right: 8px; display: block; margin-bottom: 4px; font-size: 0.85em;}
+        .message .timestamp { font-size: 0.75em; color: var(--text-darker); position: absolute; bottom: 5px; right: 10px; opacity: 0.7;}
+        .message.me .timestamp { color: #a0d8ff; }
+
+        .typing-indicator { font-style: italic; color: var(--text-darker); padding: 5px 0 0 10px; height: 20px; font-size: 0.9em;}
+        .input-area { display: flex; gap: 10px; align-items: flex-end; }
+        textarea#messageInput {
+            flex: 1; padding: 12px; border-radius: 8px; resize: none; background: var(--input-bg); color: var(--text);
+            min-height: 44px; max-height: 120px; /* Max Höhe für Textarea */
+            border: 1.5px solid var(--border-color); font-size: 1rem;
+            scrollbar-color: #555 #222; scrollbar-width: thin;
+        }
+        textarea#messageInput:focus { border: 1.5px solid var(--primary); outline: none; background: #23272b; }
+        .file-upload-label {
+            display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+            font-size: 1.5em; margin-right: 5px; color: var(--text-darker);
+            transition: color 0.2s; width: 44px; height: 44px;
+        }
+        .file-upload-label:hover { color: var(--green); }
+        input[type="file"] { display: none; }
+
+        .screen-section { flex: 1; display: flex; flex-direction: column; gap: 20px; padding: 20px; overflow: hidden; }
+        .screen-box {
+            flex: 1; background: var(--panel-bg); border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            position: relative; overflow: hidden; box-shadow: 0 4px 15px var(--shadow-strong);
+        }
+        .screen-box video { width: 100%; height: 100%; object-fit: contain; background-color: #000; }
+        .fullscreen-btn {
+            position: absolute; top: 10px; right: 10px; background: rgba(30,30,30,0.7); color: #fff;
+            border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; cursor: pointer;
+            opacity: 0.7; transition: opacity 0.2s, background-color 0.2s; z-index:10;
+        }
+        .fullscreen-btn:hover { opacity: 1; background-color: rgba(0,0,0,0.9); }
+        .screen-status-label { /* Ersetzt .offline-label für mehr Flexibilität */
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #fff; font-weight: bold; background: rgba(0, 0, 0, 0.75);
+            padding: 8px 15px; border-radius: 6px; font-size: 1.1rem;
+        }
+        .screen-status-label.offline { color: var(--red); }
+        .screen-status-label.loading { color: var(--blue); }
+
+
+        .file-attachment { display: flex; align-items: center; gap: 10px; margin-top: 5px; }
+        .file-attachment img { max-width: 200px; max-height: 200px; border-radius: 8px; vertical-align: middle; cursor: pointer; border: 1px solid var(--border-color); }
+        .file-attachment a { color: var(--blue); text-decoration: none; }
+        .file-attachment a:hover { text-decoration: underline; }
+
+        #errorDisplay {
+            display: none; background: var(--red); color: #fff; padding: 12px;
+            margin-bottom: 12px; border-radius: 8px; text-align: center;
+            box-shadow: 0 2px 5px var(--shadow-strong);
+        }
+
+        .hidden { display: none !important; } /* Hilfsklasse */
+
+        @media (max-width: 900px) { /* Geändert von 768px für besseres Verhalten */
+            .container { flex-direction: column; height: calc(100vh - 65px); /* Höhe des Headers berücksichtigen */ }
+            .chat-section, .screen-section { padding: 15px; width: auto; /* Auto statt 100% für Box-Sizing */ flex-basis: 50%; /* Aufteilung */}
+            .chat-section { border-right: none; border-bottom: 1px solid var(--border-color); }
+            .connection-bar { flex-direction: column; align-items: stretch; }
+            .status-indicator { margin: 10px 0 0 0; align-self: center; }
+            header { flex-wrap: wrap; justify-content: center; gap: 10px;}
+            .online-users { width: 100%; text-align: center;}
+            .online-users ul { justify-content: center; }
+        }
+        @media (max-width: 600px) {
+            .chat-section { flex-basis: 60%; } /* Chat bekommt mehr Platz auf kleinen Screens */
+            .screen-section { flex-basis: 40%; }
+            header h1 { font-size: 1.3rem; }
+            .status-indicator { font-size: 0.95rem; padding: 6px 14px; }
+            input[type="text"], select, button, textarea#messageInput { font-size: 0.95rem; padding: 8px 10px;}
+            .messages { padding: 10px; }
+            .message { padding: 8px 12px; max-width: 85%; }
+        }
+    </style>
 </head>
 <body>
-  <header>
-    <h1>EDMBOOK</h1>
-    <div id="connectionStatus" class="status-badge disconnected">🔴 Getrennt</div>
-    <div class="online-users" id="userList">
-      <h3>🟢 Online</h3>
-      <ul></ul>
+    <header>
+        <h1>EDMBOOK</h1>
+        <div id="connectionStatus" class="status-indicator disconnected">Getrennt</div>
+        <div class="online-users" id="userListContainer">
+            <h3>Online</h3>
+            <ul id="userList"></ul>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="chat-section">
+            <div class="connection-bar">
+                <label for="micSelect">Mikrofon:</label>
+                <select id="micSelect"></select>
+                <input type="text" id="usernameInput" placeholder="Benutzername" />
+                <button id="connectBtn">Verbinden</button>
+                <button id="disconnectBtn" class="hidden danger-btn">Trennen</button>
+                <button id="shareScreenBtn" class="hidden">🖥 Bildschirm teilen</button>
+            </div>
+            <div id="errorDisplay"></div>
+            <div class="messages" id="messagesContainer"></div>
+            <div class="typing-indicator" id="typingIndicator"></div>
+            <div class="input-area">
+                <label for="fileInput" class="file-upload-label" title="Datei senden">📎</label>
+                <input type="file" id="fileInput" />
+                <textarea id="messageInput" rows="1" placeholder="Nachricht eingeben..."></textarea> <button id="sendBtn" class="action-btn">Senden</button>
+            </div>
+        </div>
+
+        <div class="screen-section">
+            <div class="screen-box" id="myScreenBox">
+                <video id="myVideo" autoplay muted class="hidden"></video>
+                <div class="screen-status-label offline" id="myScreenStatus">MEIN BILDSCHIRM OFFLINE</div>
+                <button class="fullscreen-btn hidden" data-target-box="myScreenBox">Vollbild</button>
+            </div>
+            <div class="screen-box" id="remoteScreenBox">
+                <video id="remoteVideo" autoplay class="hidden"></video>
+                <div class="screen-status-label offline" id="remoteScreenStatus">REMOTE BILDSCHIRM OFFLINE</div>
+                <button class="fullscreen-btn hidden" data-target-box="remoteScreenBox">Vollbild</button>
+            </div>
+        </div>
     </div>
-  </header>
 
-  <div class="container">
-    <div class="chat-section">
-      <div class="connection-bar">
-        <label for="mic">Mikrofon:</label>
-        <select id="mic"></select>
-        <input type="text" id="username" placeholder="Benutzername" />
-        <button id="connectBtn" class="disconnected">Verbinden</button>
-        <button id="disconnectBtn" class="disconnected" style="display: none;">Trennen</button>
-        <button id="shareScreenBtn">🖥 Bildschirm teilen</button>
-      </div>
-      <div id="errorMsg"></div>
-      <div class="messages" id="messages"></div>
-      <div class="typing-indicator" id="typingIndicator" style="display:none;"></div>
-      <div class="input-area">
-        <label for="fileInput" class="file-upload-label" title="Datei senden">📎</label>
-        <input type="file" id="fileInput" />
-        <textarea id="messageInput" rows="2" placeholder="Nachricht eingeben..."></textarea>
-        <button id="sendBtn">Senden</button>
-      </div>
-    </div>
+    <audio id="notifSound" src="https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b7f3b.mp3" preload="auto"></audio>
 
-    <div class="screen-section">
-      <div class="screen-box" id="myScreen">
-        <video id="myVideo" autoplay muted style="width: 100%; height: 100%; object-fit: contain; display: none;"></video>
-        <div class="offline-label" id="myOffline">🔴 OFFLINE</div>
-        <button class="fullscreen-btn" onclick="toggleFullscreen('myScreen')">Vollbild</button>
-      </div>
-      <div class="screen-box" id="remoteScreen">
-        <video id="remoteVideo" autoplay style="width: 100%; height: 100%; object-fit: contain; display: none;"></video>
-        <div class="offline-label" id="remoteOffline">🔴 OFFLINE</div>
-        <button class="fullscreen-btn" onclick="toggleFullscreen('remoteScreen')">Vollbild</button>
-      </div>
-    </div>
-  </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // --- Application Module ---
+        const EDMBookApp = (() => {
+            // --- Configuration & State ---
+            const CONFIG = {
+                MAX_FILE_SIZE: 5 * 1024 * 1024, // 5MB
+                TYPING_TIMEOUT_MS: 2000,
+                USER_COLORS: [
+                    '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6',
+                    '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3'
+                ],
+                RTC_CONFIGURATION: { // Füge hier ggf. STUN/TURN Server hinzu
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' }
+                    ]
+                }
+            };
 
-  <audio id="notifSound" src="https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b7f3b.mp3" preload="auto"></audio>
+            let state = {
+                socket: null,
+                peerConnection: null,
+                localStream: null,
+                username: '',
+                userColor: '',
+                users: [], // Array von {id, name} Objekten
+                typingUsers: new Set(),
+                typingTimeoutId: null,
+                isConnected: false,
+                isScreenSharing: false
+            };
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script>
-    // --- Hilfsfunktion gegen XSS ---
-    function escapeHTML(str) {
-      return String(str).replace(/[&<>"']/g, m => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-      }[m]));
-    }
+            // --- DOM Elements Cache ---
+            const UI = {
+                usernameInput: document.getElementById('usernameInput'),
+                connectBtn: document.getElementById('connectBtn'),
+                disconnectBtn: document.getElementById('disconnectBtn'),
+                shareScreenBtn: document.getElementById('shareScreenBtn'),
+                messagesContainer: document.getElementById('messagesContainer'),
+                userList: document.getElementById('userList'),
+                micSelect: document.getElementById('micSelect'),
+                messageInput: document.getElementById('messageInput'),
+                sendBtn: document.getElementById('sendBtn'),
+                myVideo: document.getElementById('myVideo'),
+                remoteVideo: document.getElementById('remoteVideo'),
+                myScreenStatus: document.getElementById('myScreenStatus'),
+                remoteScreenStatus: document.getElementById('remoteScreenStatus'),
+                myVideoBox: document.getElementById('myScreenBox'),
+                remoteVideoBox: document.getElementById('remoteScreenBox'),
+                errorDisplay: document.getElementById('errorDisplay'),
+                typingIndicator: document.getElementById('typingIndicator'),
+                fileInput: document.getElementById('fileInput'),
+                fileUploadLabel: document.querySelector('.file-upload-label'),
+                connectionStatusBadge: document.getElementById('connectionStatus'),
+                notifSound: document.getElementById('notifSound'),
+                fullscreenBtns: document.querySelectorAll('.fullscreen-btn')
+            };
 
-    // --- Globale Variablen ---
-    let socket, peer = null, localStream = null, username = '', userColor = '';
-    let users = [];
-    const userColors = [
-      '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6',
-      '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3'
-    ];
-    let typingTimeout = null;
-    let typingUsers = new Set();
+            // --- Utility Functions ---
+            function escapeHTML(str) {
+                return String(str).replace(/[&<>"']/g, m => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+                }[m]));
+            }
 
-    // --- UI-Elemente ---
-    const usernameInput = document.getElementById('username');
-    const connectBtn = document.getElementById('connectBtn');
-    const disconnectBtn = document.getElementById('disconnectBtn');
-    const shareScreenBtn = document.getElementById('shareScreenBtn');
-    const messages = document.getElementById('messages');
-    const userList = document.querySelector('#userList ul');
-    const micSelect = document.getElementById('mic');
-    const messageInput = document.getElementById('messageInput');
-    const sendBtn = document.getElementById('sendBtn');
-    const myVideo = document.getElementById('myVideo');
-    const remoteVideo = document.getElementById('remoteVideo');
-    const myOffline = document.getElementById('myOffline');
-    const remoteOffline = document.getElementById('remoteOffline');
-    const errorDiv = document.getElementById('errorMsg');
-    const typingIndicator = document.getElementById('typingIndicator');
-    const fileInput = document.getElementById('fileInput');
-    const connectionStatus = document.getElementById('connectionStatus');
-    const notifSound = document.getElementById('notifSound');
+            function showError(message, duration = 4000) {
+                UI.errorDisplay.textContent = message;
+                UI.errorDisplay.style.display = 'block';
+                setTimeout(() => { UI.errorDisplay.style.display = 'none'; }, duration);
+                console.error("App Error:", message);
+            }
 
-    // --- Fehleranzeige ---
-    function showError(msg) {
-      errorDiv.textContent = msg;
-      errorDiv.style.display = 'block';
-      setTimeout(() => { errorDiv.style.display = 'none'; }, 4000);
-    }
+            function playNotifSound() {
+                UI.notifSound.currentTime = 0;
+                UI.notifSound.play().catch(e => console.warn("Notification sound play failed:", e));
+            }
 
-    // --- Verbindungsstatus-Badge ---
-    function setConnectionStatus(connected) {
-      if (connected) {
-        connectionStatus.textContent = "🟢 Verbunden";
-        connectionStatus.className = "status-badge connected";
-      } else {
-        connectionStatus.textContent = "🔴 Getrennt";
-        connectionStatus.className = "status-badge disconnected";
-      }
-    }
-    setConnectionStatus(false);
+            function getTimestamp() {
+                return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
 
-    function playNotifSound() {
-      notifSound.currentTime = 0;
-      notifSound.play();
-    }
+            // --- UI Update Functions ---
+            function updateConnectionStatusDisplay(statusText, statusClass) {
+                UI.connectionStatusBadge.textContent = statusText;
+                UI.connectionStatusBadge.className = `status-indicator ${statusClass}`;
+            }
 
-    // --- PeerConnection-Erstellung ---
-    function createPeer(targetId) {
-      const pc = new RTCPeerConnection();
-      pc.onicecandidate = e => e.candidate && socket.emit('ice', { target: targetId, candidate: e.candidate });
-      pc.ontrack = e => {
-        // Das remoteVideo zeigt den Stream des Anderen (inkl. Bildschirm, falls geteilt)
-        remoteVideo.srcObject = e.streams[0];
-        remoteVideo.style.display = 'block';
-        remoteOffline.style.display = 'none';
-      };
-      return pc;
-    }
+            function setAppConnected(connected) {
+                state.isConnected = connected;
+                if (connected) {
+                    updateConnectionStatusDisplay('Verbunden', 'connected');
+                    UI.usernameInput.readOnly = true;
+                    UI.connectBtn.classList.add('hidden');
+                    UI.disconnectBtn.classList.remove('hidden');
+                    UI.shareScreenBtn.classList.remove('hidden');
+                    UI.messageInput.disabled = false;
+                    UI.sendBtn.disabled = false;
+                    UI.fileUploadLabel.style.pointerEvents = 'auto';
 
-    // --- Mikrofonliste aktualisieren ---
-    async function updateMicList() {
-      micSelect.innerHTML = '';
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        devices.filter(d => d.kind === 'audioinput').forEach((d, i) => {
-          const opt = document.createElement('option');
-          opt.value = d.deviceId;
-          opt.textContent = d.label || `Mikrofon ${i+1}`;
-          micSelect.appendChild(opt);
-        });
-      } catch (e) {
-        showError('Keine Mikrofone gefunden.');
-      }
-    }
+                } else {
+                    updateConnectionStatusDisplay('Getrennt', 'disconnected');
+                    UI.usernameInput.readOnly = false;
+                    UI.usernameInput.value = state.username; // Keep username for reconnect
+                    UI.connectBtn.classList.remove('hidden');
+                    UI.disconnectBtn.classList.add('hidden');
+                    UI.shareScreenBtn.classList.add('hidden');
+                    UI.userList.innerHTML = '';
+                    UI.messagesContainer.innerHTML = '';
+                    UI.typingIndicator.style.display = 'none';
+                    state.typingUsers.clear();
+                    resetVideoElements();
+                    UI.messageInput.disabled = true;
+                    UI.sendBtn.disabled = true;
+                    UI.fileUploadLabel.style.pointerEvents = 'none';
 
-    // --- Audio-Initialisierung ---
-    async function initializeAudio() {
-      try {
-        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        localStream = new MediaStream();
-        audioStream.getTracks().forEach((track) => localStream.addTrack(track));
-      } catch (error) {
-        console.error("Fehler bei der Initialisierung des Audio-Streams:", error);
-        showError("Mikrofonzugriff fehlgeschlagen.");
-      }
-    }
+                }
+            }
 
-    // --- Socket-Initialisierung ---
-    async function initSocket() {
-      socket = io();
-      socket.on('message', ({ username: uname, text, color }) => {
-        appendMessage(uname, text, color);
-        if (uname !== username) playNotifSound();
-      });
-      socket.on('file', ({ username: uname, fileName, fileType, fileData, color }) => {
-        appendFileMessage(uname, fileName, fileType, fileData, color);
-        if (uname !== username) playNotifSound();
-      });
-      socket.on('users', list => {
-        if (users.length && list.length > users.length) playNotifSound();
-        updateUserList(list);
-        users = list.filter(u => u.name !== username);
-      });
-      socket.on('offer', async ({ from, sdp }) => {
-        if (!peer) {
-          peer = createPeer(from);
-          // Immer lokale Tracks hinzufügen!
-          if (localStream) localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
-        }
-        await peer.setRemoteDescription(new RTCSessionDescription(sdp));
-        const answer = await peer.createAnswer();
-        await peer.setLocalDescription(answer);
-        socket.emit('answer', { target: from, sdp: answer });
-      });
-      socket.on('answer', ({ sdp }) => {
-        peer && peer.setRemoteDescription(new RTCSessionDescription(sdp));
-      });
-      socket.on('ice', ({ candidate }) => {
-        peer && peer.addIceCandidate(new RTCIceCandidate(candidate));
-      });
+            function appendMessageToDOM(msgData) { // msgData = {username, text, color, type, fileName, fileType, fileData}
+                const { username: uname, text, color, type = 'text', fileName, fileType, fileData } = msgData;
+                const msgDiv = document.createElement('div');
+                msgDiv.classList.add('message');
+                if (uname === state.username) msgDiv.classList.add('me');
 
-      // Tippanzeige anderer Nutzer
-      socket.on('typing', ({ username: typingUser }) => {
-        if (typingUser !== username) {
-          typingUsers.add(typingUser);
-          updateTypingIndicator();
-          playNotifSound();
-        }
-        if (typingTimeout) clearTimeout(typingTimeout);
-        typingTimeout = setTimeout(() => {
-          typingUsers.delete(typingUser);
-          updateTypingIndicator();
-        }, 2000);
-      });
+                let contentHTML = `<span class="name" style="color:${color || '#fff'}">${escapeHTML(uname)}:</span>`;
 
-      // Join-Fehler (z.B. Maximale User)
-      socket.on('joinError', ({ message }) => {
-        showError(message);
-        setConnectionStatus(false);
-        socket.disconnect();
-      });
-    }
+                if (type === 'file') {
+                    if (fileType.startsWith('image/')) {
+                        contentHTML += `<div class="file-attachment"><img src="${fileData}" alt="${escapeHTML(fileName)}" onclick="this.requestFullscreen()"/></div> <a href="${fileData}" download="${escapeHTML(fileName)}">${escapeHTML(fileName)}</a>`;
+                    } else {
+                        contentHTML += `<div class="file-attachment">📄 <a href="${fileData}" download="${escapeHTML(fileName)}">${escapeHTML(fileName)}</a></div>`;
+                    }
+                } else {
+                    contentHTML += escapeHTML(text);
+                }
+                contentHTML += `<span class="timestamp">${getTimestamp()}</span>`;
+                msgDiv.innerHTML = contentHTML;
 
-    // --- Nachrichten & Dateien einfügen mit Animation ---
-    function appendMessage(uname, text, color) {
-      const msg = document.createElement('div');
-      msg.classList.add('message');
-      if (uname === username) msg.classList.add('me');
-      msg.innerHTML = `<span class="name" style="color:${color}">${escapeHTML(uname)}:</span> ${escapeHTML(text)}`;
-      messages.appendChild(msg);
-      msg.style.opacity = "0";
-      setTimeout(()=>msg.style.opacity = "1", 20);
-      messages.scrollTop = messages.scrollHeight;
-    }
-    function appendFileMessage(uname, fileName, fileType, fileData, color) {
-      const msg = document.createElement('div');
-      msg.classList.add('message');
-      if (uname === username) msg.classList.add('me');
-      let content = `<span class="name" style="color:${color}">${escapeHTML(uname)}:</span> `;
-      if (fileType.startsWith('image/')) {
-        content += `<a href="${fileData}" target="_blank"><img src="${fileData}" alt="${escapeHTML(fileName)}" /></a>`;
-      } else {
-        content += `<span class="file-attachment"><a href="${fileData}" download="${escapeHTML(fileName)}">${escapeHTML(fileName)}</a></span>`;
-      }
-      msg.innerHTML = content;
-      messages.appendChild(msg);
-      msg.style.opacity = "0";
-      setTimeout(()=>msg.style.opacity = "1", 20);
-      messages.scrollTop = messages.scrollHeight;
-    }
+                UI.messagesContainer.appendChild(msgDiv);
+                UI.messagesContainer.scrollTop = UI.messagesContainer.scrollHeight;
+                // Animation is handled by CSS now
+            }
 
-    // --- Nutzerliste animieren ---
-    function updateUserList(list) {
-      userList.innerHTML = '';
-      list.forEach(u => {
-        const li = document.createElement('li');
-        li.innerHTML = `<span class="user-dot"></span> ${escapeHTML(u.name)}`;
-        userList.appendChild(li);
-      });
-    }
+            function updateUserListDisplay(usersArray) {
+                UI.userList.innerHTML = '';
+                usersArray.forEach(user => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<span class="user-dot" style="background-color:${user.color || CONFIG.USER_COLORS[0]}"></span> ${escapeHTML(user.name)}`;
+                    UI.userList.appendChild(li);
+                });
+            }
 
-    function updateTypingIndicator() {
-      if (typingUsers.size > 0) {
-        typingIndicator.textContent = [...typingUsers].join(', ') + ' schreibt...';
-        typingIndicator.style.display = 'block';
-      } else {
-        typingIndicator.style.display = 'none';
-      }
-    }
+            function updateTypingIndicatorDisplay() {
+                if (state.typingUsers.size > 0) {
+                    const usersString = Array.from(state.typingUsers).join(', ');
+                    UI.typingIndicator.textContent = `${usersString} schreibt...`;
+                    UI.typingIndicator.style.display = 'block';
+                } else {
+                    UI.typingIndicator.style.display = 'none';
+                }
+            }
 
-    // --- Benutzername aus LocalStorage laden ---
-    document.addEventListener('DOMContentLoaded', () => {
-      const savedName = localStorage.getItem('username');
-      if (savedName) usernameInput.value = savedName;
-      if (Notification.permission !== "granted") {
-        Notification.requestPermission();
-      }
-    });
+            function updateVideoDisplay(videoElement, statusElement, stream, isMyStream = false) {
+                if (stream && stream.active) {
+                    videoElement.srcObject = stream;
+                    videoElement.classList.remove('hidden');
+                    statusElement.classList.add('hidden');
+                    if(isMyStream) UI.myVideoBox.querySelector('.fullscreen-btn').classList.remove('hidden');
+                    else UI.remoteVideoBox.querySelector('.fullscreen-btn').classList.remove('hidden');
 
-    // --- Verbinden ---
-    connectBtn.addEventListener('click', async () => {
-      await updateMicList();
-      await initializeAudio();
-      await initSocket();
-      username = usernameInput.value.trim();
-      localStorage.setItem('username', username);
-      if (!username) return showError('Bitte Benutzernamen eingeben.');
-      usernameInput.readOnly = true;
-      userColor = userColors[Math.floor(Math.random() * userColors.length)];
-      socket.emit('join', { username });
-      connectBtn.style.display = 'none';
-      disconnectBtn.style.display = 'inline-block';
-      setConnectionStatus(true);
+                } else {
+                    if (videoElement.srcObject) {
+                        videoElement.srcObject.getTracks().forEach(track => track.stop());
+                    }
+                    videoElement.srcObject = null;
+                    videoElement.classList.add('hidden');
+                    statusElement.textContent = isMyStream ? "MEIN BILDSCHIRM OFFLINE" : "REMOTE BILDSCHIRM OFFLINE";
+                    statusElement.className = 'screen-status-label offline';
+                    statusElement.classList.remove('hidden');
+                     if(isMyStream) UI.myVideoBox.querySelector('.fullscreen-btn').classList.add('hidden');
+                    else UI.remoteVideoBox.querySelector('.fullscreen-btn').classList.add('hidden');
+                }
+            }
+            
+            function resetVideoElements() {
+                updateVideoDisplay(UI.myVideo, UI.myScreenStatus, null, true);
+                updateVideoDisplay(UI.remoteVideo, UI.remoteScreenStatus, null, false);
+                state.isScreenSharing = false;
+            }
 
-      try {
-        if (users.length === 0) return;
-        peer = createPeer(users[0].id);
-        // Immer lokale Tracks hinzufügen!
-        if (localStream) localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
-        const offer = await peer.createOffer();
-        await peer.setLocalDescription(offer);
-        socket.emit('offer', { target: users[0].id, sdp: offer });
-      } catch (err) {
-        showError('Mikrofonzugriff fehlgeschlagen.');
-      }
-    });
+            // --- Media Device Functions ---
+            async function populateMicList() {
+                UI.micSelect.innerHTML = '';
+                try {
+                    await navigator.mediaDevices.getUserMedia({ audio: true }); // Request permission first
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const audioInputs = devices.filter(d => d.kind === 'audioinput');
+                    if (audioInputs.length === 0) {
+                        showError('Keine Mikrofone gefunden. Audio-Chat nicht möglich.');
+                        return;
+                    }
+                    audioInputs.forEach((d, i) => {
+                        const opt = document.createElement('option');
+                        opt.value = d.deviceId;
+                        opt.textContent = d.label || `Mikrofon ${i + 1}`;
+                        UI.micSelect.appendChild(opt);
+                    });
+                } catch (e) {
+                    showError('Mikrofonzugriff verweigert oder fehlgeschlagen.');
+                    console.error("Mic enumeration failed:", e);
+                }
+            }
 
-    // --- Trennen ---
-    disconnectBtn.addEventListener('click', () => {
-      if (socket) socket.disconnect();
-      connectBtn.style.display = 'inline-block';
-      disconnectBtn.style.display = 'none';
-      usernameInput.readOnly = false;
-      messages.innerHTML = '';
-      userList.innerHTML = '';
-      typingIndicator.style.display = 'none';
-      typingUsers.clear();
-      [myVideo, remoteVideo].forEach(v => {
-        if (v.srcObject) v.srcObject.getTracks().forEach(t => t.stop());
-        v.srcObject = null;
-        v.style.display = 'none';
-      });
-      myOffline.style.display = 'block';
-      remoteOffline.style.display = 'block';
-      setConnectionStatus(false);
-      peer = null;
-    });
+            async function initializeLocalMedia(includeVideo = false) {
+                try {
+                    // Stop existing tracks before getting new ones
+                    if (state.localStream) {
+                        state.localStream.getTracks().forEach(track => track.stop());
+                    }
 
-    // --- Nachricht senden ---
-    sendBtn.addEventListener('click', () => {
-      const text = messageInput.value.trim();
-      if (!text || !username) return;
-      socket.emit('message', { username, text, color: userColor });
-      messageInput.value = '';
-      socket.emit('typing', { username, typing: false });
-    });
+                    const constraints = {
+                        audio: UI.micSelect.value ? { deviceId: { exact: UI.micSelect.value } } : true,
+                        video: includeVideo
+                    };
+                    
+                    const stream = includeVideo 
+                        ? await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "always"}, audio: false }) // Screen share, no audio from screen
+                        : await navigator.mediaDevices.getUserMedia(constraints);
 
-    // --- Senden mit Enter ---
-    messageInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendBtn.click();
-      }
-    });
+                    if (includeVideo) { // Screen sharing stream
+                        state.isScreenSharing = true;
+                        const screenVideoTrack = stream.getVideoTracks()[0];
+                        
+                        // Keep existing audio track if available, or get a new one
+                        let audioStream;
+                        if (state.localStream && state.localStream.getAudioTracks().length > 0) {
+                            audioStream = new MediaStream([state.localStream.getAudioTracks()[0]]);
+                        } else {
+                            audioStream = await navigator.mediaDevices.getUserMedia({ audio: constraints.audio });
+                        }
+                        const audioTrack = audioStream.getAudioTracks()[0];
 
-    // --- Tippanzeige beim Tippen ---
-    messageInput.addEventListener('input', () => {
-      if (username && socket) socket.emit('typing', { username, typing: true });
-    });
+                        state.localStream = new MediaStream([screenVideoTrack, audioTrack]); // Combine screen video with mic audio
+                        updateVideoDisplay(UI.myVideo, UI.myScreenStatus, new MediaStream([screenVideoTrack]), true); // Display only video locally
 
-    // --- Datei-Upload ---
-    fileInput.addEventListener('change', () => {
-      const file = fileInput.files[0];
-      if (!file) return;
-      if (file.size > 5 * 1024 * 1024) { // 5MB Limit
-        showError('Datei zu groß (max. 5MB).');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        socket.emit('file', {
-          username,
-          fileName: file.name,
-          fileType: file.type,
-          fileData: e.target.result,
-          color: userColor
-        });
-      };
-      reader.readAsDataURL(file);
-      fileInput.value = ''; // Reset für nächsten Upload
-    });
+                        // Handle "stop sharing" button in browser
+                        screenVideoTrack.onended = () => {
+                            state.isScreenSharing = false;
+                            updateVideoDisplay(UI.myVideo, UI.myScreenStatus, null, true);
+                            // Remove video track from localStream & peerConnection, then renegotiate
+                            if (state.localStream) state.localStream.removeTrack(screenVideoTrack);
+                            if (state.peerConnection) {
+                                const sender = state.peerConnection.getSenders().find(s => s.track === screenVideoTrack);
+                                if (sender) state.peerConnection.removeTrack(sender);
+                                renegotiate();
+                            }
+                        };
 
-    // --- Datei-Auswahl öffnen per Klick auf Büroklammer ---
-    document.querySelector('.file-upload-label').addEventListener('click', () => {
-      fileInput.click();
-    });
+                    } else { // Audio-only stream
+                        state.localStream = stream;
+                         // Do not display local audio stream in a video element unless specifically intended
+                    }
 
-    // --- Bildschirm teilen ---
-    shareScreenBtn.addEventListener('click', async () => {
-      try {
-        const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        // Entferne vorherige VideoTracks aus localStream
-        localStream.getVideoTracks().forEach(track => {
-          localStream.removeTrack(track);
-          if (peer) {
-            const senders = peer.getSenders().filter(s => s.track && s.track.kind === 'video');
-            senders.forEach(sender => peer.removeTrack(sender));
-          }
-        });
-        // Füge neuen VideoTrack zu localStream und PeerConnection
-        displayStream.getVideoTracks().forEach(track => {
-          localStream.addTrack(track);
-          if (peer) {
-            peer.addTrack(track, localStream);
-          }
-        });
-        myVideo.srcObject = new MediaStream([...displayStream.getVideoTracks(), ...localStream.getAudioTracks()]);
-        myVideo.style.display = 'block';
-        myOffline.style.display = 'none';
+                    // Add tracks to existing peer connection or prepare for new one
+                    if (state.peerConnection && state.localStream) {
+                        state.localStream.getTracks().forEach(track => {
+                            const sender = state.peerConnection.getSenders().find(s => s.track && s.track.kind === track.kind);
+                            if (sender) {
+                                sender.replaceTrack(track).catch(e => console.error("Replace track failed:", e));
+                            } else {
+                                state.peerConnection.addTrack(track, state.localStream);
+                            }
+                        });
+                        if(includeVideo) await renegotiate(); // Renegotiate if video was added/changed
+                    }
 
-        // Renegotiation: neues Offer senden!
-        if (peer && users.length > 0) {
-          const offer = await peer.createOffer();
-          await peer.setLocalDescription(offer);
-          socket.emit('offer', { target: users[0].id, sdp: offer });
-        }
-      } catch (err) {
-        showError('Bildschirmfreigabe fehlgeschlagen.');
-      }
-    });
+                } catch (error) {
+                    console.error("Error initializing media:", error);
+                    showError(`Medienzugriff fehlgeschlagen: ${error.name}. Sicherstellen, dass Berechtigungen erteilt sind.`);
+                    if (includeVideo) state.isScreenSharing = false; // Reset flag if screen share failed
+                    return false; // Indicate failure
+                }
+                return true; // Indicate success
+            }
 
-    // --- Vollbild ---
-    function toggleFullscreen(id) {
-      const el = document.getElementById(id);
-      if (!document.fullscreenElement) el.requestFullscreen(); else document.exitFullscreen();
-    }
-  </script>
+            // --- WebRTC Functions ---
+            function createPeerConnection(targetSocketId) {
+                if (state.peerConnection) {
+                    state.peerConnection.close();
+                }
+                state.peerConnection = new RTCPeerConnection(CONFIG.RTC_CONFIGURATION);
+
+                state.peerConnection.onicecandidate = event => {
+                    if (event.candidate && state.socket) {
+                        state.socket.emit('webrtcSignaling', { type: 'iceCandidate', candidate: event.candidate, target: targetSocketId });
+                    }
+                };
+
+                state.peerConnection.ontrack = event => {
+                    updateVideoDisplay(UI.remoteVideo, UI.remoteScreenStatus, event.streams[0]);
+                };
+
+                state.peerConnection.oniceconnectionstatechange = () => {
+                    console.log("ICE connection state change:", state.peerConnection?.iceConnectionState);
+                    if (state.peerConnection?.iceConnectionState === 'failed' || 
+                        state.peerConnection?.iceConnectionState === 'disconnected' ||
+                        state.peerConnection?.iceConnectionState === 'closed') {
+                        updateVideoDisplay(UI.remoteVideo, UI.remoteScreenStatus, null);
+                        // Potentially attempt to renegotiate or show an error
+                    }
+                     if (state.peerConnection?.iceConnectionState === 'connected') {
+                        // Connection established
+                    }
+                };
+                
+                // Add local tracks if stream exists
+                if (state.localStream) {
+                    state.localStream.getTracks().forEach(track => {
+                        state.peerConnection.addTrack(track, state.localStream);
+                    });
+                }
+                return state.peerConnection;
+            }
+
+            async function renegotiate() {
+                if (!state.peerConnection || state.users.length === 0) return;
+                // Assuming connection is with the first user in the list for simplicity
+                // In a multi-user scenario, you'd need to manage multiple peer connections
+                const targetUser = state.users.find(u => u.id !== state.socket.id); // Find a remote user
+                if (!targetUser) return;
+
+                try {
+                    const offer = await state.peerConnection.createOffer({
+                        offerToReceiveAudio: 1,
+                        offerToReceiveVideo: 1 
+                    });
+                    await state.peerConnection.setLocalDescription(offer);
+                    state.socket.emit('webrtcSignaling', { type: 'offer', sdp: offer, target: targetUser.id });
+                } catch (e) {
+                    showError("Fehler bei der WebRTC-Neuverhandlung.");
+                    console.error("Renegotiation error:", e);
+                }
+            }
+
+            function closePeerConnection() {
+                if (state.peerConnection) {
+                    state.peerConnection.close();
+                    state.peerConnection = null;
+                }
+                resetVideoElements();
+            }
+
+            // --- Socket.IO Event Handlers ---
+            function setupSocketListeners() {
+                state.socket.on('connect', () => {
+                    console.log('Socket connected:', state.socket.id);
+                    // Now emit join, as we have an ID
+                    state.userColor = CONFIG.USER_COLORS[Math.floor(Math.random() * CONFIG.USER_COLORS.length)];
+                    state.socket.emit('join', { username: state.username, color: state.userColor });
+                });
+
+                state.socket.on('joinSuccess', async ({ users: currentUsers, id: myId }) => {
+                    setAppConnected(true);
+                    state.socket.id = myId; // Store own socket ID
+                    state.users = currentUsers.filter(u => u.id !== myId); // All other users
+                    updateUserListDisplay(currentUsers);
+                    
+                    // Initialize audio stream for P2P calls
+                    if (!await initializeLocalMedia(false)) { // false for audio-only initially
+                        showError("Konnte Audio nicht initialisieren. Voice/Video-Chat ist möglicherweise eingeschränkt.");
+                    }
+
+                    // Initiate connection to the first other user if any
+                    // This is a simplification; a real app might allow choosing who to call or have a different call model
+                    if (state.users.length > 0) {
+                        const targetUser = state.users[0]; // Connect to the first user in the list
+                        createPeerConnection(targetUser.id);
+                        if (state.peerConnection) await renegotiate(); // Start offer process
+                    }
+                });
+                
+                state.socket.on('joinError', ({ message }) => {
+                    showError(message);
+                    if (state.socket) state.socket.disconnect();
+                    setAppConnected(false);
+                });
+
+                state.socket.on('userJoined', (newUser) => {
+                    if(newUser.id === state.socket.id) return; // Ignore self join event if server sends it
+                    appendMessageToDOM({ username: 'System', text: `${newUser.name} ist beigetreten.`, color: 'var(--blue)'});
+                    state.users.push(newUser);
+                    // Update the full list of users based on server's perspective after join/leave
+                    state.socket.emit('getUsers'); // Request updated list
+                    playNotifSound();
+
+                    // If no current peer connection and this is the first other user, initiate connection
+                    if (!state.peerConnection && state.users.length === 1 && state.users[0].id === newUser.id) {
+                        createPeerConnection(newUser.id);
+                         if (state.peerConnection) renegotiate();
+                    }
+                });
+
+                state.socket.on('userLeft', ({ id, name }) => {
+                    appendMessageToDOM({ username: 'System', text: `${name} hat den Chat verlassen.`, color: 'var(--blue)'});
+                    state.users = state.users.filter(user => user.id !== id);
+                     state.socket.emit('getUsers'); // Request updated list
+                    
+                    // If the disconnected user was the one we had a peer connection with
+                    // This simplistic model assumes one active P2P call.
+                    // For multiple calls, you'd need to find the specific peer connection.
+                    if (state.peerConnection && state.users.length === 0) { // Or check if target of PC left
+                         closePeerConnection();
+                    }
+                });
+
+                state.socket.on('allUsers', (currentUsersList) => { // Server sends full list
+                    state.users = currentUsersList.filter(u => u.id !== state.socket.id);
+                    updateUserListDisplay(currentUsersList);
+                });
+
+                state.socket.on('message', (msgData) => { // msgData = {username, text, color}
+                    appendMessageToDOM(msgData);
+                    if (msgData.username !== state.username) playNotifSound();
+                });
+
+                state.socket.on('file', (fileMsgData) => { // fileMsgData = {username, fileName, fileType, fileData, color}
+                    appendMessageToDOM({ ...fileMsgData, type: 'file' });
+                    if (fileMsgData.username !== state.username) playNotifSound();
+                });
+
+                state.socket.on('typing', ({ username: typingUser, isTyping }) => {
+                    if (typingUser === state.username) return;
+                    if (isTyping) {
+                        state.typingUsers.add(typingUser);
+                    } else {
+                        state.typingUsers.delete(typingUser);
+                    }
+                    updateTypingIndicatorDisplay();
+                    // No sound for typing indicators generally, can be noisy
+                });
+
+                state.socket.on('webrtcSignaling', async (data) => {
+                    const { type, sdp, candidate, from } = data;
+                    if (!state.peerConnection && (type === 'offer' || type === 'answer')) {
+                         createPeerConnection(from); // Ensure PC exists
+                    }
+                    if (!state.peerConnection) {
+                        console.warn("Received WebRTC signal but no peer connection exists.");
+                        return;
+                    }
+
+                    try {
+                        if (type === 'offer') {
+                            await state.peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+                            if(state.localStream) { // ensure local stream is attached before creating answer
+                                state.localStream.getTracks().forEach(track => {
+                                     if (!state.peerConnection.getSenders().find(s => s.track === track)) {
+                                        state.peerConnection.addTrack(track, state.localStream);
+                                    }
+                                });
+                            } else {
+                                // If no local stream, we might want to initialize it here
+                                console.warn("No local stream when receiving offer, creating answer without sending tracks.");
+                            }
+                            const answer = await state.peerConnection.createAnswer();
+                            await state.peerConnection.setLocalDescription(answer);
+                            state.socket.emit('webrtcSignaling', { type: 'answer', sdp: answer, target: from });
+                        } else if (type === 'answer') {
+                            await state.peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+                        } else if (type === 'iceCandidate' && candidate) {
+                            await state.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                        }
+                    } catch (e) {
+                        showError("Fehler bei WebRTC-Signalisierung.");
+                        console.error("WebRTC signaling error:", type, e);
+                    }
+                });
+                
+                state.socket.on('disconnect', (reason) => {
+                    console.log('Socket disconnected:', reason);
+                    showError(`Verbindung getrennt: ${reason}. Versuche erneute Verbindung oder manuell verbinden.`);
+                    setAppConnected(false);
+                    closePeerConnection();
+                     // Server-seitige Disconnects sollten hier behandelt werden.
+                     // UI zurücksetzen, aber Benutzername behalten für einfachen Reconnect.
+                });
+            }
+
+            // --- Event Handlers ---
+            async function handleConnect() {
+                state.username = UI.usernameInput.value.trim();
+                if (!state.username) {
+                    showError('Bitte Benutzernamen eingeben.');
+                    return;
+                }
+                localStorage.setItem('username', state.username);
+                updateConnectionStatusDisplay('Verbinde...', 'connecting');
+
+                if(!state.socket || !state.socket.connected) {
+                    state.socket = io({
+                        // reconnectionAttempts: 3, // Optional: Socket.IO Reconnection options
+                        // query: { username: state.username } // Can pass username earlier if server expects it
+                    });
+                    setupSocketListeners(); // Setup listeners on new socket instance
+                } else {
+                    // If socket exists and is connected, just re-emit join (e.g. after a soft disconnect)
+                     state.socket.emit('join', { username: state.username, color: state.userColor });
+                }
+                 await populateMicList(); // Populate mics before attempting to use them for joinSuccess
+            }
+
+            function handleDisconnect() {
+                if (state.socket) {
+                    state.socket.disconnect();
+                }
+                // UI updates are handled by the 'disconnect' socket event or setAppConnected(false)
+                setAppConnected(false); // Ensure UI is reset if socket was already null
+                closePeerConnection();
+                if (state.localStream) {
+                    state.localStream.getTracks().forEach(track => track.stop());
+                    state.localStream = null;
+                }
+                state.isScreenSharing = false;
+            }
+
+            function handleSendMessage() {
+                const text = UI.messageInput.value.trim();
+                if (!text || !state.isConnected) return;
+
+                state.socket.emit('message', { username: state.username, text, color: state.userColor });
+                appendMessageToDOM({ username: state.username, text, color: state.userColor }); // Optimistic update
+                UI.messageInput.value = '';
+                UI.messageInput.style.height = 'auto'; // Reset height for textarea
+                UI.messageInput.focus();
+                
+                // Stop typing indicator
+                if (state.typingTimeoutId) clearTimeout(state.typingTimeoutId);
+                state.socket.emit('typing', { username: state.username, isTyping: false });
+                state.typingUsers.delete(state.username); // Though we don't show own typing
+                updateTypingIndicatorDisplay();
+
+            }
+
+            function handleFileInputChange(event) {
+                const file = event.target.files[0];
+                if (!file || !state.isConnected) return;
+
+                if (file.size > CONFIG.MAX_FILE_SIZE) {
+                    showError(`Datei zu groß (max. ${CONFIG.MAX_FILE_SIZE / 1024 / 1024}MB).`);
+                    UI.fileInput.value = ''; // Reset input
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    state.socket.emit('file', {
+                        username: state.username,
+                        fileName: file.name,
+                        fileType: file.type,
+                        fileData: e.target.result, // Base64 data URL
+                        color: state.userColor
+                    });
+                    // Optimistic update for file sender
+                    appendMessageToDOM({
+                        username: state.username,
+                        fileName: file.name,
+                        fileType: file.type,
+                        fileData: e.target.result,
+                        color: state.userColor,
+                        type: 'file'
+                    });
+                };
+                reader.readAsDataURL(file);
+                UI.fileInput.value = ''; // Reset input for next upload
+            }
+
+            async function handleShareScreen() {
+                if (!state.isConnected) {
+                    showError("Bitte zuerst verbinden.");
+                    return;
+                }
+                if (state.isScreenSharing) {
+                     // Stop screen sharing: Handled by track.onended or manually
+                    if(state.localStream) {
+                        const videoTrack = state.localStream.getVideoTracks().find(t => t.getSettings().displaySurface); // Heuristic for screen track
+                        if(videoTrack) videoTrack.stop(); // This should trigger onended
+                    }
+                     UI.shareScreenBtn.textContent = "🖥 Bildschirm teilen";
+                } else {
+                    UI.myScreenStatus.textContent = "WIRD GELADEN...";
+                    UI.myScreenStatus.className = 'screen-status-label loading';
+                    UI.myScreenStatus.classList.remove('hidden');
+
+                    const success = await initializeLocalMedia(true); // true for video (screen)
+                    if (success) {
+                        UI.shareScreenBtn.textContent = "🛑 Teilen beenden";
+                    } else {
+                         updateVideoDisplay(UI.myVideo, UI.myScreenStatus, null, true); // Reset on failure
+                         UI.shareScreenBtn.textContent = "🖥 Bildschirm teilen";
+                    }
+                }
+            }
+
+            function handleTyping() {
+                if (!state.isConnected || !state.socket) return;
+                
+                state.socket.emit('typing', { username: state.username, isTyping: true });
+                if (state.typingTimeoutId) clearTimeout(state.typingTimeoutId);
+                state.typingTimeoutId = setTimeout(() => {
+                    state.socket.emit('typing', { username: state.username, isTyping: false });
+                }, CONFIG.TYPING_TIMEOUT_MS);
+
+                // Auto-resize textarea
+                UI.messageInput.style.height = 'auto';
+                UI.messageInput.style.height = (UI.messageInput.scrollHeight) + 'px';
+            }
+            
+            function toggleFullscreen(event) {
+                const boxId = event.currentTarget.dataset.targetBox;
+                const element = document.getElementById(boxId);
+                if (!element) return;
+
+                if (!document.fullscreenElement) {
+                    element.requestFullscreen().catch(err => {
+                        showError(`Vollbildfehler: ${err.message}`);
+                    });
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    }
+                }
+            }
+
+
+            // --- Initialization ---
+            function bindEventListeners() {
+                UI.connectBtn.addEventListener('click', handleConnect);
+                UI.disconnectBtn.addEventListener('click', handleDisconnect);
+                UI.sendBtn.addEventListener('click', handleSendMessage);
+                UI.shareScreenBtn.addEventListener('click', handleShareScreen);
+
+                UI.messageInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                    }
+                });
+                UI.messageInput.addEventListener('input', handleTyping);
+
+                UI.fileInput.addEventListener('change', handleFileInputChange);
+                UI.fileUploadLabel.addEventListener('click', () => UI.fileInput.click());
+
+                UI.fullscreenBtns.forEach(btn => btn.addEventListener('click', toggleFullscreen));
+                
+                window.addEventListener('beforeunload', () => {
+                    if (state.socket && state.socket.connected) {
+                        state.socket.disconnect();
+                    }
+                });
+                document.addEventListener('fullscreenchange', () => {
+                    UI.fullscreenBtns.forEach(btn => {
+                        const box = document.getElementById(btn.dataset.targetBox);
+                        if (document.fullscreenElement === box) {
+                            btn.textContent = "Vollbild verlassen";
+                        } else {
+                            btn.textContent = "Vollbild";
+                        }
+                    });
+                });
+            }
+
+            function init() {
+                const savedUsername = localStorage.getItem('username');
+                if (savedUsername) {
+                    UI.usernameInput.value = savedUsername;
+                    state.username = savedUsername;
+                }
+                
+                populateMicList(); // Populate mics on load, permission might be asked here or on connect
+                setAppConnected(false); // Set initial UI state (disconnected)
+                bindEventListeners();
+
+                if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+                    Notification.requestPermission().then(permission => {
+                        if (permission === "granted") {
+                            console.log("Desktop notifications enabled.");
+                        }
+                    });
+                }
+                console.log("EDMBook App initialized.");
+            }
+
+            return {
+                init // Publicly expose only the init function
+            };
+        })();
+
+        // --- Start the application ---
+        document.addEventListener('DOMContentLoaded', EDMBookApp.init);
+    </script>
 </body>
 </html>
