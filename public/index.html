@@ -5,40 +5,54 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>EDMBOOK</title>
   <style>
+    :root {
+      --green: #4caf50;
+      --green-dark: #388e3c;
+      --red: #f44336;
+      --bg-dark: #121212;
+      --bg-panel: #1e1e1e;
+      --bg-chat: #2a2a2a;
+      --text-light: #e0e0e0;
+    }
+
     body {
       margin: 0;
       font-family: 'Segoe UI', sans-serif;
-      background-color: #121212;
-      color: #e0e0e0;
+      background-color: var(--bg-dark);
+      color: var(--text-light);
       display: flex;
       flex-direction: column;
       height: 100vh;
       overflow: hidden;
     }
+
     header {
-      background-color: #1e1e1e;
+      background-color: var(--bg-panel);
       padding: 12px 20px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
     }
+
     header h1 {
       margin: 0;
       font-size: 1.5rem;
-      color: #ffffff;
+      color: white;
     }
+
     .online-users {
-      background-color: #1e1e1e;
+      background-color: var(--bg-panel);
       padding: 8px 12px;
       border-radius: 8px;
-      margin-left: 20px;
     }
+
     .online-users h3 {
       margin: 0 0 6px 0;
       font-size: 0.95rem;
-      color: #4caf50;
+      color: var(--green);
     }
+
     .online-users ul {
       list-style: none;
       padding: 0;
@@ -47,17 +61,21 @@
       gap: 10px;
       flex-wrap: wrap;
     }
+
     .online-users li {
-      background-color: #2a2a2a;
+      background-color: var(--bg-chat);
       padding: 4px 10px;
       border-radius: 6px;
       font-size: 0.9rem;
     }
+
     .container {
       display: flex;
+      flex-direction: row;
       flex: 1;
       width: 100%;
     }
+
     .chat-section {
       flex: 2;
       display: flex;
@@ -65,63 +83,79 @@
       padding: 20px;
       border-right: 1px solid #333;
     }
+
     .connection-bar {
       display: flex;
+      flex-wrap: wrap;
       gap: 10px;
       margin-bottom: 20px;
       align-items: center;
-      flex-wrap: wrap;
     }
+
     input, select, button {
       padding: 8px 12px;
       border-radius: 8px;
       border: none;
       outline: none;
       background-color: #2c2c2c;
-      color: #e0e0e0;
-      min-width: 150px;
+      color: var(--text-light);
     }
+
     button {
-      background-color: #4caf50;
-      color: white;
       cursor: pointer;
       transition: all 0.2s ease;
     }
+
+    #connectBtn.disconnected {
+      background-color: var(--red);
+      color: white;
+    }
+
+    #connectBtn.connected {
+      background-color: var(--green);
+      color: white;
+    }
+
     button:hover {
-      background-color: #388e3c;
       transform: scale(1.05);
     }
+
     .messages {
       flex: 1;
-      background-color: #1e1e1e;
+      background-color: var(--bg-panel);
       border-radius: 12px;
       padding: 10px;
       overflow-y: auto;
       margin-bottom: 10px;
       scrollbar-width: thin;
     }
+
     .message {
       margin: 8px 0;
       padding: 8px 12px;
-      background-color: #2a2a2a;
+      background-color: var(--bg-chat);
       border-radius: 8px;
     }
+
     .message span.name {
       font-weight: bold;
       margin-right: 6px;
     }
+
     .input-area {
       display: flex;
       gap: 10px;
     }
+
     .input-area textarea {
       flex: 1;
       padding: 10px;
       border-radius: 8px;
       resize: none;
-      background-color: #1e1e1e;
-      color: #e0e0e0;
+      background-color: var(--bg-panel);
+      color: var(--text-light);
     }
+
     .screen-section {
       flex: 1;
       display: flex;
@@ -129,20 +163,22 @@
       gap: 20px;
       padding: 20px;
     }
+
     .screen-box {
       flex: 1;
-      background-color: #1e1e1e;
+      background-color: var(--bg-panel);
       border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #ff5555;
+      color: var(--red);
       font-weight: bold;
       font-size: 1.2rem;
       text-transform: uppercase;
       box-shadow: 0 0 10px rgba(0,0,0,0.3);
       position: relative;
     }
+
     .fullscreen-btn {
       position: absolute;
       top: 8px;
@@ -155,8 +191,25 @@
       cursor: pointer;
       font-size: 0.8rem;
     }
+
     .fullscreen-btn:hover {
       background: #555;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+      .container {
+        flex-direction: column;
+      }
+      .chat-section, .screen-section {
+        flex: none;
+        width: 100%;
+        padding: 10px;
+      }
+      .connection-bar, .input-area {
+        flex-direction: column;
+        align-items: stretch;
+      }
     }
   </style>
 </head>
@@ -175,7 +228,7 @@
         <label for="mic">Mikrofon:</label>
         <select id="mic"><option>Standard</option></select>
         <input type="text" id="username" placeholder="Benutzername" />
-        <button id="connectBtn">Verbinden</button>
+        <button id="connectBtn" class="disconnected">Verbinden</button>
         <button id="shareScreenBtn">🖥 Bildschirm teilen</button>
       </div>
       <div class="messages" id="messages"></div>
@@ -224,6 +277,8 @@
       usernameInput.readOnly = true;
       userColor = '#' + Math.floor(Math.random()*16777215).toString(16);
       socket.emit('join', { username });
+      connectBtn.classList.remove('disconnected');
+      connectBtn.classList.add('connected');
     });
 
     sendBtn.addEventListener('click', () => {
