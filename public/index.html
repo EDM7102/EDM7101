@@ -260,53 +260,52 @@
 
     shareScreenBtn.addEventListener('click', async () => {
       try {
-        localStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        localStream = new MediaStream([
+          ...displayStream.getVideoTracks(),
+          ...audioStream.getAudioTracks()
+        ]);
         myVideo.srcObject = localStream;
         myVideo.style.display = 'block';
         myStatus.textContent = '🟢 ONLINE';
 
         if (users.length === 0) return;
         peer = new RTCPeerConnection();
-
         localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
-
         peer.onicecandidate = e => {
           if (e.candidate) {
             socket.emit('ice', { target: users[0].id, candidate: e.candidate });
           }
         };
-
-        peer.createOffer().then(offer => {
-          peer.setLocalDescription(offer);
-          socket.emit('offer', { target: users[0].id, sdp: offer });
-        });
-
         peer.ontrack = e => {
           remoteVideo.srcObject = e.streams[0];
           remoteVideo.style.display = 'block';
           remoteStatus.textContent = '🟢 ONLINE';
         };
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        socket.emit('offer', { target: users[0].id, sdp: offer });
       } catch (err) {
-        alert('Bildschirmfreigabe fehlgeschlagen.');
+        alert('Bildschirmfreigabe oder Audio fehlgeschlagen.');
       }
     });
 
     socket.on('offer', async ({ from, sdp }) => {
       peer = new RTCPeerConnection();
-
       peer.onicecandidate = e => {
         if (e.candidate) {
           socket.emit('ice', { target: from, candidate: e.candidate });
         }
       };
-
       peer.ontrack = e => {
         remoteVideo.srcObject = e.streams[0];
         remoteVideo.style.display = 'block';
         remoteStatus.textContent = '🟢 ONLINE';
       };
-
       await peer.setRemoteDescription(new RTCSessionDescription(sdp));
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => peer.addTrack(track, stream));
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
       socket.emit('answer', { target: from, sdp: answer });
