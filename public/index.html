@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>EDMBOOKeeeeee</title>
+  <title>EDMBOOKKKK</title>
   <style>
     :root {
       --green: #4caf50;
@@ -211,7 +211,8 @@
     }
 
     // --- Globale Variablen ---
-    let socket, peer = null, localStream = null, users = [], username = '', userColor = '';
+    let socket, peer = null, localStream = null, username = '', userColor = '';
+    let users = [];
     const userColors = [
       '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6',
       '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3'
@@ -292,7 +293,7 @@
       }
     }
 
-    // --- Audio-Initialisierung unabhängig von Bildschirmfreigabe ---
+    // --- Audio-Initialisierung ---
     async function initializeAudio() {
       try {
         const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -321,12 +322,11 @@
         users = list.filter(u => u.name !== username);
       });
       socket.on('offer', async ({ from, sdp }) => {
-        peer = createPeer(from);
-        // --- STELLE SICHER, DASS AUDIO IMMER DA IST ---
-        if (!localStream || localStream.getTracks().length === 0) {
-          await initializeAudio();
+        if (!peer) {
+          peer = createPeer(from);
+          // Immer lokale Tracks hinzufügen!
+          if (localStream) localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
         }
-        localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
         await peer.setRemoteDescription(new RTCSessionDescription(sdp));
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
@@ -433,10 +433,10 @@
       setConnectionStatus(true);
 
       try {
-        // --- AUDIO IMMER DIREKT IN PEERCONNECTION, AUCH OHNE BILDSCHIRM ---
         if (users.length === 0) return;
         peer = createPeer(users[0].id);
-        localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
+        // Immer lokale Tracks hinzufügen!
+        if (localStream) localStream.getTracks().forEach(t => peer.addTrack(t, localStream));
         const offer = await peer.createOffer();
         await peer.setLocalDescription(offer);
         socket.emit('offer', { target: users[0].id, sdp: offer });
@@ -463,6 +463,7 @@
       myOffline.style.display = 'block';
       remoteOffline.style.display = 'block';
       setConnectionStatus(false);
+      peer = null;
     });
 
     // --- Nachricht senden ---
@@ -518,18 +519,26 @@
     shareScreenBtn.addEventListener('click', async () => {
       try {
         const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        // Füge Video-Track zu localStream hinzu und PeerConnection (Renegotiation)
+        // Entferne vorherige VideoTracks aus localStream
+        localStream.getVideoTracks().forEach(track => {
+          localStream.removeTrack(track);
+          if (peer) {
+            const senders = peer.getSenders().filter(s => s.track && s.track.kind === 'video');
+            senders.forEach(sender => peer.removeTrack(sender));
+          }
+        });
+        // Füge neuen VideoTrack zu localStream und PeerConnection
         displayStream.getVideoTracks().forEach(track => {
           localStream.addTrack(track);
           if (peer) {
             peer.addTrack(track, localStream);
           }
         });
-        myVideo.srcObject = localStream;
+        myVideo.srcObject = new MediaStream([...displayStream.getVideoTracks(), ...localStream.getAudioTracks()]);
         myVideo.style.display = 'block';
         myOffline.style.display = 'none';
 
-        // Wichtig: Renegotiation/Offer an den Peer schicken!
+        // Renegotiation: neues Offer senden!
         if (peer && users.length > 0) {
           const offer = await peer.createOffer();
           await peer.setLocalDescription(offer);
