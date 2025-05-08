@@ -448,17 +448,52 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 200px;
+    min-height: 200px; /* Mindesthöhe beibehalten, kann im Vollbild überschrieben werden */
     background-color: #111;
 }
 
 #remoteScreenVideo {
     display: block;
-    max-width: 100%;
-    max-height: 400px;
+    max-width: 100%; /* Maximale Breite standardmäßig 100% */
+    max-height: 400px; /* Maximale Höhe standardmäßig 400px */
     height: auto;
     border-radius: 8px;
+    object-fit: contain; /* Standardmäßig 'contain' für beste Sichtbarkeit */
 }
+
+/* Styling für den Remote Screen Container im Vollbildmodus */
+.remote-screen-container.is-fullscreen {
+    position: fixed; /* Oder absolute, je nach gewünschtem Verhalten im Layout */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 9999; /* Über allem anderen anzeigen */
+    padding: 0; /* Padding im Vollbild entfernen */
+    border-bottom: none;
+}
+
+/* Styling für das Video-Element im Vollbildmodus */
+.remote-screen-container.is-fullscreen #remoteScreenVideo {
+    max-width: 100vw; /* Max Breite 100% des Viewports */
+    max-height: 100vh; /* Max Höhe 100% des Viewports */
+    width: 100%; /* Breite auf 100% setzen */
+    height: 100%; /* Höhe auf 100% setzen */
+    border-radius: 0; /* Kein Border-Radius im Vollbild */
+    object-fit: contain; /* 'contain' beibehalten oder auf 'cover' ändern falls Füllung ohne schwarze Balken gewünscht ist */
+}
+/* Zusätzliche Regel für das Videoelement selbst, falls der Browser es direkt in den Vollbildmodus bringt */
+#remoteScreenVideo:-webkit-full-screen,
+#remoteScreenVideo:-moz-full-screen,
+#remoteScreenVideo:-ms-fullscreen,
+#remoteScreenVideo:fullscreen {
+    object-fit: contain; /* Oder 'cover' */
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+}
+
 
 .remote-screen-container .fullscreen-btn {
     position: absolute;
@@ -473,6 +508,11 @@ body {
     cursor: pointer;
     z-index: 10;
     transition: background-color 0.2s ease;
+}
+/* Position des Buttons im Vollbild anpassen */
+.remote-screen-container.is-fullscreen .fullscreen-btn {
+     bottom: 10px;
+     right: 10px;
 }
 .remote-screen-container .fullscreen-btn:hover {
      background-color: rgba(60,60,60,0.9);
@@ -603,6 +643,10 @@ body {
     #remoteScreenVideo {
         max-height: 300px;
     }
+     /* Mobile fullscreen adjustment if needed */
+     .remote-screen-container.is-fullscreen #remoteScreenVideo {
+         /* max-height: 100vh; */ /* Already covered by default fullscreen rule */
+     }
 }
 
 @media (max-width: 768px) {
