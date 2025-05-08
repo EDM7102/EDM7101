@@ -3,14 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EDMBook Erweiterter Chat</title>
-    <link rel="stylesheet" href="style.css">
+    <title>EDMBook Sprach-Chat</title> <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="app-container">
         <header class="app-header">
-            <h1>EDMBook Erweiterter Chat</h1>
-            <div id="statusIndicator" class="status-indicator disconnected">Getrennt</div>
+            <h1>EDMBook Sprach-Chat</h1> <div id="statusIndicator" class="status-indicator disconnected">Getrennt</div>
         </header>
 
         <div class="main-content">
@@ -24,10 +22,12 @@
                     <select id="micSelect" title="Mikrofon auswählen">
                         <option value="">Standard-Mikrofon</option>
                         </select>
+                    <div id="remoteAudioControls">
+                        </div>
+
 
                     <button id="connectBtn">Verbinden</button>
                     <button id="disconnectBtn" class="hidden danger-btn">Trennen</button>
-                    <button id="shareScreenBtn" class="hidden">Bildschirm teilen</button>
                 </div>
 
                 <div class="user-list-container">
@@ -39,21 +39,6 @@
 
             <main class="chat-area">
                 <div id="errorMessage" class="error-message hidden"></div>
-
-                <div class="video-chat-area">
-                    <div class="video-box hidden" id="localVideoBox">
-                        <h3>Dein Bild/Ton</h3>
-                        <video id="localVideo" autoplay playsinline muted class="hidden"></video>
-                        <div id="localScreenStatus" class="screen-status-label offline">KAMERA AUS / FEHLER</div>
-                        <button id="localVideoFullscreenBtn" class="fullscreen-btn hidden">Vollbild</button>
-                    </div>
-                    <div class="video-box" id="remoteVideoBox">
-                        <h3>Remote Bild/Ton</h3>
-                        <video id="remoteVideo" autoplay playsinline class="hidden"></video>
-                        <div id="remoteScreenStatus" class="screen-status-label offline">KEIN VIDEO/SCREEN</div>
-                        <button id="remoteVideoFullscreenBtn" class="fullscreen-btn hidden">Vollbild</button>
-                    </div>
-                </div>
 
                 <div id="messagesContainer" class="messages-container">
                     </div>
