@@ -240,7 +240,7 @@ body {
 
 /* Allgemeine Button-Stile (angepasst) */
 .connection-controls button,
-.message-input-area button { /* file-upload-label entfernt */
+.message-input-area button {
     padding: 12px;
     border: none;
     border-radius: 6px;
@@ -260,7 +260,7 @@ body {
 
 
 .connection-controls button:hover,
-.message-input-area button:hover { /* file-upload-label entfernt */
+.message-input-area button:hover {
     background-color: var(--button-hover-bg);
 }
 
@@ -271,20 +271,9 @@ body {
     background-color: var(--button-primary-hover-bg);
 }
 
-.connection-controls button {
-    width: 100%;
-}
-#disconnectBtn.danger-btn {
-    background-color: var(--error-bg);
-    color: var(--error-text-color);
-}
-#disconnectBtn.danger-btn:hover {
-    background-color: #a92424;
-}
-
 .connection-controls button:disabled,
 .connection-controls select:disabled,
-.message-input-area button:disabled, /* file-upload-label entfernt */
+.message-input-area button:disabled,
 #localMuteBtn.mute-btn:disabled,
 .remote-audio-item button.mute-btn:disabled {
     background-color: #383838;
@@ -365,7 +354,7 @@ body {
     border-radius: 18px;
     max-width: 80%;
     word-wrap: break-word;
-    position: relative;
+    /* position: relative; Zeitstempel entfernt, daher Position relative nicht mehr zwingend nötig */
     filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2));
 }
 .message .name {
@@ -390,24 +379,7 @@ body {
     margin-left: 8px;
 }
 
-.message .timestamp {
-    font-size: 0.75em;
-    color: var(--text-muted-color);
-    position: absolute;
-    bottom: 6px;
-    right: 12px;
-    background-color: rgba(var(--message-bg-me), 0.8); /* Hintergrund, damit Text lesbar bleibt */
-    padding: 0 4px;
-    border-radius: 3px;
-    pointer-events: none;
-}
-.message:not(.me) .timestamp {
-    right: auto;
-    left: 12px;
-    background-color: rgba(var(--message-bg-other), 0.8);
-}
-
-/* .file-attachment stiles entfernt */
+/* .message .timestamp stiles entfernt */
 
 
 .typing-indicator {
@@ -428,7 +400,7 @@ body {
     background-color: var(--secondary-bg);
     border-top: 1px solid var(--divider-color);
     align-items: flex-end;
-    gap: 10px; /* Abstand zwischen Elementen */
+    gap: 10px;
     flex-shrink: 0;
 }
 #messageInput {
@@ -458,8 +430,6 @@ body {
     padding: 12px 25px;
     min-width: 80px;
 }
-
-/* .file-upload-label stiles entfernt */
 
 
 .error-message {
@@ -556,16 +526,8 @@ body {
      .message:not(.me) {
           border-bottom-left-radius: 4px;
      }
-     .message .timestamp {
-         font-size: 0.7em;
-         bottom: 4px;
-         right: 8px;
-     }
-      .message:not(.me) .timestamp {
-          left: 8px;
-      }
+     /* .message .timestamp responsive stiles entfernt */
 
-    /* .file-attachment responsive stiles entfernt */
 
     .typing-indicator {
         padding: 8px 15px;
@@ -585,7 +547,6 @@ body {
           padding: 10px 20px;
          border-radius: 20px;
      }
-     /* .file-upload-label responsive stiles entfernt */
 
     .error-message {
         padding: 10px;
