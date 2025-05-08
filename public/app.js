@@ -21,6 +21,13 @@ document.addEventListener('DOMContentLoaded', () => {
         remoteScreenFullscreenBtn: document.querySelector('#remoteScreenContainer .fullscreen-btn')
     };
 
+    // NEUE ZEILE FÜR DEBUGGING DES BUTTONS
+    console.log("[App] UI.connectBtn gefunden:", !!UI.connectBtn); // Prüft, ob das Element gefunden wurde (true/false)
+    if (UI.connectBtn) {
+        console.log("[App] UI.connectBtn Element:", UI.connectBtn); // Zeigt das Element in der Konsole an
+    }
+
+
     let socket;
     let state = {
         connected: false,
@@ -1213,6 +1220,83 @@ document.addEventListener('DOMContentLoaded', () => {
                    }
               });
          }
+    }
+
+
+    // --- Event Listener Zuweisungen (jetzt nach den Funktionsdefinitionen) ---
+
+    console.log("[App] Event Listener werden zugewiesen."); // Log, um zu sehen, ob dieser Abschnitt erreicht wird
+    if (UI.connectBtn) { // Prüfen, ob Button gefunden wurde
+        UI.connectBtn.addEventListener('click', connect);
+        console.log("[App] connectBtn Listener zugewiesen."); // Log, um zu sehen, ob Zuweisung erfolgt
+    } else {
+         console.error("[App] connectBtn Element nicht gefunden!"); // Log, falls Button nicht gefunden wird
+    }
+
+
+    if (UI.micSelect) UI.micSelect.addEventListener('change', async () => {
+        if (state.connected && !state.isSharingScreen) {
+            console.log("[WebRTC] Mikrofonauswahl geändert. Versuche lokalen Stream zu aktualisieren.");
+            await setupLocalAudioStream();
+        } else if (state.isSharingScreen) {
+            console.warn("[WebRTC] Mikrofonauswahl geändert während Bildschirmteilung. Ändert sich erst danach.");
+        } else {
+             console.log("[WebRTC] Mikrofonauswahl geändert (nicht verbunden). Wird bei nächster Verbindung verwendet.");
+        }
+    });
+
+    if (UI.shareScreenBtn) UI.shareScreenBtn.addEventListener('click', toggleScreenSharing);
+
+     if (UI.remoteScreenFullscreenBtn) {
+         UI.remoteScreenFullscreenBtn.addEventListener('click', () => {
+             if (UI.remoteScreenContainer) {
+                  toggleFullscreen(UI.remoteScreenContainer);
+             }
+         });
+     }
+
+     document.addEventListener('fullscreenchange', () => {
+         if (UI.remoteScreenFullscreenBtn) {
+              const isRemoteScreenInFullscreen = document.fullscreenElement === UI.remoteScreenContainer || (UI.remoteScreenContainer && UI.remoteScreenContainer.contains(document.fullscreenElement));
+              UI.remoteScreenFullscreenBtn.textContent = isRemoteScreenInFullscreen ? "Vollbild verlassen" : "Vollbild";
+         }
+     });
+
+    window.addEventListener('beforeunload', () => {
+        if (socket && socket.connected) {
+            socket.disconnect();
+        }
+         stopLocalAudioStream();
+         stopScreenSharing(false);
+         closeAllPeerConnections();
+    });
+
+    // Globale Funktion für Vollbild
+    function toggleFullscreen(element) {
+        if (!element) {
+             console.warn("[UI] toggleFullscreen: Element nicht gefunden.");
+             return;
+        }
+        if (!document.fullscreenElement) {
+            if (element.requestFullscreen) {
+                element.requestFullscreen().catch(err => console.error(`[UI] Fullscreen error: ${err.message}`, err));
+            } else if (element.webkitRequestFullscreen) {
+                element.webkitRequestFullscreen().catch(err => console.error(`[UI] Fullscreen error (webkit): ${err.message}`, err));
+            } else if (element.msRequestFullscreen) {
+                element.msRequestFullscreen().catch(err => console.error(`[UI] Fullscreen error (ms): ${err.message}`, err));
+            } else {
+                 console.warn("[UI] toggleFullscreen: Browser does not support Fullscreen API on this element.");
+            }
+        } else {
+             console.log("[UI] toggleFullscreen: Exiting Fullscreen.");
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) {
+                document.msExitFullscreen();
+            }
+        }
     }
 
 
