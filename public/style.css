@@ -28,33 +28,32 @@
     --message-bg-other: var(--content-element-bg);
     --message-text-other: var(--text-color);
 
-    --error-bg: #d32f2f; /* Standard Fehler Rot */
+    --error-bg: #d32f2f;
     --error-text-color: var(--text-on-accent-bg);
     --success-bg: #388e3c;
-    --success-text-color: var(--success-text-color); /* Korrektur: sollte sich selbst referenzieren, oder direkt Farbe nutzen */
-    /* --success-text-color: var(--text-on-accent-bg); */
+    --success-text-color: var(--text-on-accent-bg);
 
 
     /* Farben für Audio-Steuerung */
     --audio-active-color: #4caf50;
-    --audio-muted-color: #f44336; /* Standard Mute Rot */
+    --audio-muted-color: #f44336;
     --audio-button-bg: var(--button-bg);
     --audio-button-hover-bg: var(--button-hover-bg);
-    --audio-button-muted-bg: var(--error-bg); /* Stärkeres Rot für Mute Button */
-    --audio-button-muted-hover-bg: #a92428; /* Dunkleres Rot für Hover auf Mute */
+    --audio-button-muted-bg: var(--error-bg);
+    --audio-button-muted-hover-bg: #a92428;
 
     /* Farben für Bildschirmteilen */
-    --share-screen-bg: #1e88e5; /* Blau für Teilen-Button */
-    --share-screen-hover-bg: #1565c0; /* Dunkleres Blau */
-    --share-screen-active-bg: #e53935; /* Rot für "Teilen beenden" */
-    --share-screen-active-hover-bg: #c62828; /* Dunkleres Rot */
+    --share-screen-bg: #1e88e5;
+    --share-screen-hover-bg: #1565c0;
+    --share-screen-active-bg: #e53935;
+    --share-screen-active-hover-bg: #c62828;
 
-    --view-screen-btn-bg: var(--share-screen-bg); /* Farbe für "Ansehen" Button */
+    --view-screen-btn-bg: var(--share-screen-bg);
     --view-screen-btn-hover-bg: var(--share-screen-hover-bg);
-    --stop-viewing-btn-bg: var(--share-screen-active-bg); /* Farbe für "Anzeige stoppen" Button */
+    --stop-viewing-btn-bg: var(--share-screen-active-bg);
     --stop-viewing-btn-hover-bg: var(--share-screen-active-hover-bg);
 
-    --sharing-indicator-color: var(--share-screen-bg); /* Farbe für das Teilen-Symbol */
+    --sharing-indicator-color: var(--share-screen-bg);
 }
 
 body {
@@ -112,7 +111,6 @@ body {
 .status-indicator.disconnected { background-color: var(--error-bg); color: var(--error-text-color); }
 .status-indicator.connecting { background-color: #f39c12; color: white; }
 
-
 .main-content {
     display: flex;
     flex-grow: 1;
@@ -159,7 +157,7 @@ body {
     padding: 12px;
     margin-bottom: 10px;
     border: 1px solid var(--border-color);
-    border-radius: 6px;
+    border-radius: 66px;
     background-color: var(--content-element-bg);
     color: var(--text-color);
     font-size: 1em;
@@ -213,7 +211,7 @@ body {
     font-size: 0.85em;
     width: auto;
     margin-bottom: 0;
-    border-radius: 4px;
+    border-radius: 46px;
     background-color: var(--audio-button-bg);
     color: var(--button-text-color);
     transition: background-color 0.2s ease;
@@ -238,7 +236,7 @@ body {
     padding: 12px;
     font-size: 1em;
     margin-bottom: 10px;
-    border-radius: 6px;
+    border-radius: 66px;
     background-color: var(--audio-button-bg);
     color: var(--button-text-color);
     transition: background-color 0.2s ease;
@@ -275,7 +273,7 @@ body {
 .message-input-area button {
     padding: 12px;
     border: none;
-    border-radius: 6px;
+    border-radius: 66px;
     background-color: var(--button-bg);
     color: var(--button-text-color);
     cursor: pointer;
@@ -307,6 +305,17 @@ body {
 }
 #connectBtn:hover, #disconnectBtn:hover, #sendBtn:hover {
     background-color: var(--button-primary-hover-bg);
+}
+
+.connection-controls button {
+    width: 100%;
+}
+#disconnectBtn.danger-btn {
+    background-color: var(--error-bg);
+    color: var(--error-text-color);
+}
+#disconnectBtn.danger-btn:hover {
+    background-color: #a92428;
 }
 
 .connection-controls button:disabled,
@@ -362,11 +371,7 @@ body {
      color: var(--sharing-indicator-color);
      margin-left: 5px;
      flex-shrink: 0;
-     /* Optional: Animation oder Pulse Effekt */
-     /* animation: pulse 1.5s infinite ease-in-out; */
 }
-/* @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } } */
-
 
 /* Styling für den "Bildschirm ansehen" Button in der Benutzerliste */
 #userList li .view-screen-button {
@@ -374,7 +379,7 @@ body {
     font-size: 0.8em;
     width: auto;
     margin-bottom: 0;
-    border-radius: 4px;
+    border-radius: 46px;
     cursor: pointer;
     transition: background-color 0.2s ease;
     flex-shrink: 0;
@@ -419,7 +424,6 @@ body {
     border-bottom: 1px solid var(--divider-color);
     position: relative;
     padding: 10px;
-    /* display: none; wird per JS umgeschaltet mit .hidden */
 }
 .remote-screen-container .screen-header {
     display: flex;
@@ -465,7 +469,7 @@ body {
     background-color: rgba(40,40,40,0.8);
     color: var(--text-color);
     border: 1px solid rgba(180,180,180,0.5);
-    border-radius: 4px;
+    border-radius: 46px;
     cursor: pointer;
     z-index: 10;
     transition: background-color 0.2s ease;
@@ -522,7 +526,7 @@ body {
 }
 .message:not(.me) {
     background-color: var(--message-bg-other);
-    color: var(--message-text-other);
+    color: var(--text-muted-color);
     align-self: flex-start;
     border-bottom-left-radius: 6px;
     margin-left: 8px;
@@ -595,7 +599,6 @@ body {
     display: none !important;
 }
 
-/* Responsivität für Bildschirm teilen Bereich */
 @media (max-width: 1024px) {
     #remoteScreenVideo {
         max-height: 300px;
@@ -638,7 +641,7 @@ body {
      #shareScreenBtn {
          padding: 10px;
          margin-bottom: 8px;
-         border-radius: 4px;
+         border-radius: 46px;
          font-size: 0.95em;
      }
      .connection-controls select {
@@ -661,10 +664,9 @@ body {
      .remote-audio-item button.mute-btn {
          padding: 4px 8px;
          font-size: 0.8em;
-         border-radius: 3px;
+         border-radius: 46px;
      }
 
-    /* Remote Screen Container Responsive */
     .remote-screen-container {
         padding: 8px;
     }
