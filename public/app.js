@@ -61,26 +61,45 @@ document.addEventListener('DOMContentLoaded', () => {
         USER_COLORS: ['#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9700', '#ff5722', '#795548'],
     };
 
-    // --- Initialisierung und UI-Helfer ---
-    function initializeUI() {
-        console.log("[UI] initializeUI aufgerufen. state.connected:", state.connected);
-        UI.disconnectBtn.classList.add('hidden');
-        UI.shareScreenBtn.classList.add('hidden'); // Bildschirm teilen Button verstecken
-        UI.sendBtn.disabled = true;
-        UI.messageInput.disabled = true;
-        setConnectionStatus('disconnected', 'Nicht verbunden');
-        loadStateFromLocalStorage();
-        if (UI.micSelect) UI.micSelect.disabled = false;
-        updateRemoteAudioControls(); // UI für Remote Audio leeren
-        updateRemoteScreenDisplay(null); // Remote Screen Anzeige zurücksetzen und verstecken
+    // --- Funktionsdefinitionen (jetzt VOR den Event Listenern) ---
+
+    // Hilfsfunktion für HTML-Escaping
+    function escapeHTML(str) {
+        if (typeof str !== 'string') return String(str);
+        const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+        return str.replace(/[&<>"']/g, m => map[m]);
     }
 
+    // Hilfsfunktion für Benutzerfarben
+    function getUserColor(userIdOrName) {
+        let hash = 0;
+        const str = String(userIdOrName);
+        for (let i = 0; i < str.length; i++) {
+            hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        return CONFIG.USER_COLORS[Math.abs(hash) % CONFIG.USER_COLORS.length];
+    }
+
+    // Funktion zum Abspielen des Benachrichtigungssounds
+    function playNotificationSound() {
+        if (state.notificationSound) {
+            state.notificationSound.currentTime = 0;
+             state.notificationSound.play().catch(e => {
+                 console.warn("Benachrichtigungssound konnte nicht abgespielt werden:", e);
+             });
+        }
+    }
+
+    // --- UI Update Functions ---
+
+    // Setzt den Verbindungsstatus in der UI
     function setConnectionStatus(statusClass, text) {
         if (!UI.statusIndicator) return;
         UI.statusIndicator.className = `status-indicator ${statusClass}`;
         UI.statusIndicator.textContent = text;
     }
 
+    // Zeigt eine Fehlermeldung in der UI an
     function displayError(message) {
         if (!UI.errorMessage) return;
         UI.errorMessage.textContent = message;
@@ -90,13 +109,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 5000);
     }
 
+    // Aktualisiert die UI nach erfolgreicher Verbindung
     function updateUIAfterConnect() {
         console.log("[UI] updateUIAfterConnect aufgerufen.");
-        state.connected = true; // Sicherstellen, dass der State korrekt gesetzt ist
+        state.connected = true;
 
         UI.connectBtn.classList.add('hidden');
         UI.disconnectBtn.classList.remove('hidden');
-        UI.shareScreenBtn.classList.remove('hidden'); // Bildschirm teilen Button anzeigen
+        UI.shareScreenBtn.classList.remove('hidden');
         UI.sendBtn.disabled = false;
         UI.messageInput.disabled = false;
         if (UI.usernameInput) UI.usernameInput.disabled = true;
@@ -104,19 +124,18 @@ document.addEventListener('DOMContentLoaded', () => {
         setConnectionStatus('connected', `Verbunden als ${state.username}`);
         saveStateToLocalStorage();
 
-        // Lokalen Audio-Stream (Mikrofon) starten
-        setupLocalAudioStream();
-        // Mikrofonliste nach erfolgreichem Verbinden laden
-        populateMicList();
+        setupLocalAudioStream(); // Lokalen Audio-Stream starten
+        populateMicList(); // Mikrofonliste nach erfolgreichem Verbinden laden
     }
 
+    // Aktualisiert die UI nach Trennung der Verbindung
     function updateUIAfterDisconnect() {
         console.log("[UI] updateUIAfterDisconnect aufgerufen.");
-        state.connected = false; // Sicherstellen, dass der State korrekt gesetzt ist
+        state.connected = false;
 
         UI.connectBtn.classList.remove('hidden');
         UI.disconnectBtn.classList.add('hidden');
-        UI.shareScreenBtn.classList.add('hidden'); // Bildschirm teilen Button verstecken
+        UI.shareScreenBtn.classList.add('hidden');
         UI.sendBtn.disabled = true;
         UI.messageInput.disabled = true;
         if (UI.usernameInput) UI.usernameInput.disabled = false;
@@ -127,24 +146,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (userCountPlaceholder) userCountPlaceholder.textContent = '0';
         UI.typingIndicator.textContent = '';
 
-        // WebRTC Bereinigung
-        stopLocalAudioStream(); // Stoppt Mikrofonstream und entfernt lokalen Mute Button
-        stopScreenSharing(false); // Stoppt Bildschirmstream lokal (Signal an andere wird im toggle gemacht, hier nicht senden)
-        closeAllPeerConnections(); // Schließt alle P2P Verbindungen und remote Streams
+        stopLocalAudioStream();
+        stopScreenSharing(false);
+        closeAllPeerConnections();
 
-        updateRemoteAudioControls(); // UI für Remote Audio leeren
-        updateRemoteScreenDisplay(null); // Remote Screen Anzeige zurücksetzen und verstecken
+        updateRemoteAudioControls();
+        updateRemoteScreenDisplay(null); // Stellt sicher, dass die Anzeige aus ist und State zurückgesetzt wird
 
-        state.users = {}; // Alte Benutzerliste leeren
-        state.allUsersList = []; // Komplette Liste leeren
+        state.users = {};
+        state.allUsersList = [];
         state.socketId = null;
-        state.remoteStreams.clear(); // Alle empfangenen Streams löschen (redundant mit closeAllPeerConnections, aber sicher)
+        state.remoteStreams.clear();
     }
 
+    // Speichert den Benutzernamen im lokalen Speicher
     function saveStateToLocalStorage() {
         localStorage.setItem('chatClientUsername', UI.usernameInput.value);
     }
 
+    // Lädt den Benutzernamen aus dem lokalen Speicher
     function loadStateFromLocalStorage() {
         const savedUsername = localStorage.getItem('chatClientUsername');
         if (savedUsername) {
@@ -152,254 +172,64 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function playNotificationSound() {
-        if (state.notificationSound) {
-            state.notificationSound.currentTime = 0; // Setzt die Wiedergabeposition an den Anfang
-             // Das play() Promise abfangen, falls Autoplay blockiert wird
-             state.notificationSound.play().catch(e => {
-                 // Fehler beim Abspielen (z.B. Autoplay blockiert durch Browser-Einstellungen) abfangen
-                 console.warn("Benachrichtigungssound konnte nicht abgespielt werden:", e);
-                 // Dem Benutzer eventuell einen Hinweis geben, dass Sounds blockiert sind und wie er sie erlauben kann
-             });
-        }
-    }
-
-
-    // --- Event Listener ---
-    UI.connectBtn.addEventListener('click', connect);
-    UI.disconnectBtn.addEventListener('click', disconnect);
-    UI.sendBtn.addEventListener('click', sendMessage);
-    UI.messageInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-        } else {
-            sendTyping();
-        }
-    });
-    UI.messageInput.addEventListener('input', () => {
-        UI.messageInput.style.height = 'auto';
-        let newHeight = UI.messageInput.scrollHeight;
-        const maxHeight = 100;
-        if (maxHeight && newHeight > maxHeight) newHeight = maxHeight;
-        UI.messageInput.style.height = newHeight + 'px';
-    });
-
-    if (UI.micSelect) UI.micSelect.addEventListener('change', async () => {
-        if (state.connected && !state.isSharingScreen) { // Nur Mikrofon ändern, wenn nicht geteilt wird
-            console.log("[WebRTC] Mikrofonauswahl geändert. Versuche lokalen Stream zu aktualisieren.");
-            await setupLocalAudioStream(); // Ruft setLocalStream auf, was Tracks in PCs aktualisiert
-        } else if (state.isSharingScreen) {
-            console.warn("[WebRTC] Mikrofonauswahl geändert während Bildschirmteilung. Ändert sich erst danach.");
-        } else {
-             console.log("[WebRTC] Mikrofonauswahl geändert (nicht verbunden). Wird bei nächster Verbindung verwendet.");
-        }
-    });
-
-    if (UI.shareScreenBtn) UI.shareScreenBtn.addEventListener('click', toggleScreenSharing);
-
-    // Event Listener für den Vollbild-Button des Remote-Bildschirms
-     if (UI.remoteScreenFullscreenBtn) {
-         UI.remoteScreenFullscreenBtn.addEventListener('click', () => {
-             if (UI.remoteScreenContainer) { // Vollbild für den Container, nicht nur das Video
-                  toggleFullscreen(UI.remoteScreenContainer);
-             }
-         });
-     }
-    // Listener für Fullscreenchange, um Button-Text anzupassen
-     document.addEventListener('fullscreenchange', () => {
-         if (UI.remoteScreenFullscreenBtn) { // Prüfe nur den Button selbst
-              // Prüft, ob das Fullscreen-Element entweder der Container selbst oder ein Kindelement davon ist
-              const isRemoteScreenInFullscreen = document.fullscreenElement === UI.remoteScreenContainer || (UI.remoteScreenContainer && UI.remoteScreenContainer.contains(document.fullscreenElement));
-              UI.remoteScreenFullscreenBtn.textContent = isRemoteScreenInFullscreen ? "Vollbild verlassen" : "Vollbild";
-         }
-     });
-
-
-    window.addEventListener('beforeunload', () => {
-        // Versuche, die Verbindung sauber zu trennen, bevor die Seite geschlossen wird
-        if (socket && socket.connected) {
-            socket.disconnect();
-            // Geben dem Server einen Moment Zeit, das Disconnect-Event zu verarbeiten.
-            // In der Praxis ist dies nicht 100% zuverlässig, da das Fenster schließen
-            // den Prozess abrupt beenden kann.
-        }
-        // WICHTIG: Lokale Medien-Tracks manuell stoppen, um Ressourcen freizugeben
-         stopLocalAudioStream();
-         stopScreenSharing(false); // Stoppt nur lokal, kein Signal mehr senden
-         // WICHTIG: PeerConnections manuell schließen, um oniceconnectionstatechange = 'closed' auszulösen
-         // und Ressourcen freizugeben. Dies triggert auch onremovetrack/onended bei Remote-Peers.
-         closeAllPeerConnections(); // Schließt PCs und stoppt remote Streams
-
-    });
-
-    // Globale Funktion für Vollbild (kann für andere Elemente wiederverwendet werden)
-    function toggleFullscreen(element) {
-        if (!element) {
-             console.warn("[UI] toggleFullscreen: Element nicht gefunden.");
-             return;
-        }
-        // Use the element's native fullscreen API methods
-        if (!document.fullscreenElement) {
-            if (element.requestFullscreen) {
-                element.requestFullscreen().catch(err => console.error(`[UI] Fullscreen error: ${err.message}`, err));
-            } else if (element.webkitRequestFullscreen) { /* Safari */
-                element.webkitRequestFullscreen().catch(err => console.error(`[UI] Fullscreen error (webkit): ${err.message}`, err));
-            } else if (element.msRequestFullscreen) { /* IE11 */
-                element.msRequestFullscreen().catch(err => console.error(`[UI] Fullscreen error (ms): ${err.message}`, err));
-            } else {
-                 console.warn("[UI] toggleFullscreen: Browser does not support Fullscreen API on this element.");
-            }
-        } else {
-             console.log("[UI] toggleFullscreen: Exiting Fullscreen.");
-             // Check if the element itself or one of its descendants is in fullscreen
-             // document.exitFullscreen() beendet den Vollbildmodus für das gesamte Dokument
-            if (document.exitFullscreen) {
-                document.exitFullscreen();
-            } else if (document.webkitExitFullscreen) { /* Safari */
-                document.webkitExitFullscreen();
-            } else if (document.msExitFullscreen) { /* IE11 */
-                document.msExitFullscreen();
-            }
-             // Optional: Re-check if *any* element is still in fullscreen after attempt
-             // if (document.fullscreenElement) {
-             //      console.warn("[UI] Exit Fullscreen failed, another element is still in fullscreen.");
-             // }
-        }
-    }
-
-
-    // --- Utility Functions ---
-    function escapeHTML(str) {
-        if (typeof str !== 'string') return String(str);
-        const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-        return str.replace(/[&<>"']/g, m => map[m]);
-    }
-
-    function getUserColor(userIdOrName) {
-        let hash = 0;
-        const str = String(userIdOrName);
-        for (let i = 0; i < str.length; i++) {
-            hash = str.charCodeAt(i) + ((hash << 5) - hash);
-        }
-        return CONFIG.USER_COLORS[Math.abs(hash) % CONFIG.USER_COLORS.length];
-    }
-
-    function playNotificationSound() {
-        if (state.notificationSound) {
-            state.notificationSound.currentTime = 0;
-             state.notificationSound.play().catch(e => {
-                 console.warn("Benachrichtigungssound konnte nicht abgespielt werden:", e);
-             });
-        }
-    }
-
-
-    // --- Media Device Functions ---
-    async function populateMicList() {
-        console.log("[Media] populateMicList aufgerufen.");
-        if (!UI.micSelect) {
-            console.warn("[Media] populateMicList: UI.micSelect nicht gefunden.");
-            return;
-        }
-        UI.micSelect.innerHTML = '';
-        // Standard-Option hinzufügen
-        UI.micSelect.appendChild(new Option("Standard-Mikrofon", "", true, true));
-
-        try {
-             // enumerateDevices listet Geräte auf, erfordert aber in einigen Browsern/Fällen
-             // dass zuvor schon mal getUserMedia erfolgreich war, um nicht-leere Labels zu bekommen.
-             // Wir rufen es hier auf, nachdem getUserMedia in setupLocalAudioStream() versucht wird.
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const audioInputs = devices.filter(d => d.kind === 'audioinput');
-
-            if (audioInputs.length > 0) {
-                 audioInputs.forEach(d => {
-                      // Füge nur Geräte hinzu, die nicht der Standard sind, um Duplikate zu vermeiden
-                      // und die ein Label haben (oder deviceId ist nicht default).
-                     if (d.deviceId !== 'default' && (d.label || d.deviceId)) {
-                          const opt = new Option(d.label || `Mikrofon (${d.deviceId})`, d.deviceId);
-                          UI.micSelect.appendChild(opt);
-                     }
-                 });
-                 console.log(`[Media] ${audioInputs.length} Mikrofone gefunden.`);
-            } else {
-                 console.warn("[Media] populateMicList: Keine Mikrofone gefunden.");
-                 // Optional: Hinweis im UI
-            }
-        } catch (e) {
-            console.error("[Media] populateMicList: Fehler bei der Mikrofonauflistung:", e.name, e.message);
-             const opt = new Option(`Mikrofonliste Fehler: ${e.name}`, "");
-             opt.style.color = 'var(--error-bg)';
-             UI.micSelect.appendChild(opt);
-        }
-    }
-
-    // --- UI Update Functions ---
-
-    // Passt updateUserList an, um den Sharing-Status und "Ansehen"-Button anzuzeigen
+    // Aktualisiert die UI der Benutzerliste
     function updateUserList(usersArrayFromServer) {
         const oldUsers = state.allUsersList;
-        state.allUsersList = usersArrayFromServer; // Komplette Liste vom Server (enthält jetzt sharingStatus)
+        state.allUsersList = usersArrayFromServer;
 
         const userCountPlaceholder = document.getElementById('userCountPlaceholder');
         if (userCountPlaceholder) userCountPlaceholder.textContent = usersArrayFromServer.length;
 
         const otherUsers = usersArrayFromServer.filter(user => user.id !== state.socketId);
 
-        UI.userList.innerHTML = ''; // Liste in der UI leeren
+        UI.userList.innerHTML = '';
 
         usersArrayFromServer.forEach(user => {
             const li = document.createElement('li');
-            // Benutzer-Punkt
             const dot = document.createElement('span');
             dot.classList.add('user-dot');
             dot.style.backgroundColor = escapeHTML(user.color || getUserColor(user.id));
             li.appendChild(dot);
 
-            // Container für Name und Sharing-Indikator (verwende Flexbox für Layout)
             const nameContainer = document.createElement('span');
-            nameContainer.style.flexGrow = '1'; // Name und Indikator nehmen Platz ein
+            nameContainer.style.flexGrow = '1';
             nameContainer.style.display = 'flex';
             nameContainer.style.alignItems = 'center';
-            nameContainer.style.overflow = 'hidden'; // Verhindert, dass der Name herausragt
-            nameContainer.style.textOverflow = 'ellipsis'; // Punkte für abgeschnittenen Namen
-            nameContainer.style.whiteSpace = 'nowrap'; // Name in einer Zeile halten
+            nameContainer.style.overflow = 'hidden';
+            nameContainer.style.textOverflow = 'ellipsis';
+            nameContainer.style.whiteSpace = 'nowrap';
 
 
             const nameNode = document.createTextNode(`${escapeHTML(user.username)}`);
-            if (user.id === state.socketId) { // Eigener Benutzer
+            if (user.id === state.socketId) {
                 const strong = document.createElement('strong');
                 strong.appendChild(nameNode);
                 strong.appendChild(document.createTextNode(" (Du)"));
                 nameContainer.appendChild(strong);
 
-                 // Lokaler Mute-Button hinzufügen, falls noch nicht im DOM
                  let localMuteBtn = document.getElementById('localMuteBtn');
                  if (!localMuteBtn) {
                      localMuteBtn = document.createElement('button');
                      localMuteBtn.id = 'localMuteBtn';
                      localMuteBtn.textContent = 'Mikro stumm schalten';
                      localMuteBtn.classList.add('mute-btn');
-                     localMuteBtn.classList.add('hidden'); // Start Hidden
-                     localMuteBtn.addEventListener('click', toggleLocalAudioMute);
-                     // Füge ihn unter der Mikrofonauswahl ein (finde das parent div)
+                     localMuteBtn.classList.add('hidden');
                      const micSelectParent = UI.micSelect ? UI.micSelect.parentNode : null;
                      if(micSelectParent) micSelectParent.insertBefore(localMuteBtn, UI.connectBtn);
+                     // Füge Event Listener HIER hinzu (nachdem Button erstellt wurde)
+                     localMuteBtn.addEventListener('click', toggleLocalAudioMute);
                  }
-                 // Mute Button nur anzeigen, wenn verbunden
                  if (state.connected) {
                       localMuteBtn.classList.remove('hidden');
-                      updateLocalMuteButtonUI(); // Status aktualisieren
+                      updateLocalMuteButtonUI();
                  } else {
                       localMuteBtn.classList.add('hidden');
                  }
 
-                 // Bildschirm teilen Button anzeigen/verstecken
                  if (UI.shareScreenBtn) {
                       if (state.connected) {
                            UI.shareScreenBtn.classList.remove('hidden');
-                           updateShareScreenButtonUI(); // Aktualisiere Text und Klasse (Teilen/Beenden)
+                           updateShareScreenButtonUI();
                       } else {
                            UI.shareScreenBtn.classList.add('hidden');
                       }
@@ -408,33 +238,31 @@ document.addEventListener('DOMContentLoaded', () => {
             } else { // Für andere Benutzer
                 nameContainer.appendChild(nameNode);
 
-                // Optional: Teilen-Indikator hinzufügen, wenn Benutzer teilt
+                // Teilen-Indikator hinzufügen, wenn Benutzer teilt
                 if (user.sharingStatus) {
                      const sharingIndicator = document.createElement('span');
                      sharingIndicator.classList.add('sharing-indicator');
-                     sharingIndicator.textContent = ' 🖥️'; // Oder ein Icon-Element
+                     sharingIndicator.textContent = ' 🖥️';
                      sharingIndicator.title = `${escapeHTML(user.username)} teilt Bildschirm`;
                      nameContainer.appendChild(sharingIndicator);
                 }
 
 
-                // Prüfen, ob dieser Benutzer neu ist (für Sound-Benachrichtigung)
-                // Nur Sound, wenn der Benutzer gerade online gegangen ist (war vorher nicht in der Liste)
-                // und wir bereits verbunden sind (sonst würde Sound bei jedem Start spielen).
+                // Sound abspielen, wenn NEUER Benutzer beitritt
                 if (state.connected && oldUsers.length > 0 && !oldUsers.some(oldUser => oldUser.id === user.id)) {
                      console.log(`[UI] Neuer Benutzer beigetreten: ${user.username}`);
-                     playNotificationSound(); // Sound abspielen
+                     playNotificationSound();
                 }
             }
 
-            li.appendChild(nameContainer); // Name und Indikator zum Listenelement hinzufügen
+            li.appendChild(nameContainer);
 
             // Button "Bildschirm ansehen" oder "Anzeige stoppen" hinzufügen
             // Diesen Button nur für ANDERE Benutzer hinzufügen, wenn diese teilen
             if (user.id !== state.socketId && user.sharingStatus) {
                  const viewButton = document.createElement('button');
                  viewButton.classList.add('view-screen-button');
-                 viewButton.dataset.peerId = user.id; // Peer ID speichern
+                 viewButton.dataset.peerId = user.id;
 
                  // Prüfen, ob wir gerade den Bildschirm dieses Benutzers ansehen
                  const isViewingThisPeer = state.currentlyViewingPeerId === user.id;
@@ -448,7 +276,6 @@ document.addEventListener('DOMContentLoaded', () => {
                  }
 
                  // Event Listener für den Button
-                 // Hier direkt die Funktion referenzieren, die den Klick handhabt
                  viewButton.addEventListener('click', handleViewScreenClick);
 
                  li.appendChild(viewButton);
@@ -456,15 +283,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
             UI.userList.appendChild(li);
-        }); // Ende usersArrayFromServer.forEach
+        });
 
-         // Nach jeder Userlist-Aktualisierung die PeerConnections anpassen
-         updatePeerConnections(otherUsers); // Stellt WebRTC PCs für Audio/Video sicher
-
-         // UI für Remote Audio Controls aktualisieren
          updateRemoteAudioControls(otherUsers);
+         updatePeerConnections(otherUsers);
 
-         // Stelle sicher, dass die Remote Audio Controls Sektion angezeigt/versteckt wird
          if (UI.remoteAudioControls) {
               if (otherUsers.length > 0) {
                    UI.remoteAudioControls.classList.remove('hidden');
@@ -473,17 +296,18 @@ document.addEventListener('DOMContentLoaded', () => {
               }
          }
 
-          // Nachdem die Userliste aktualisiert wurde und die Anzeige der Buttons korrekt ist,
-          // prüfen wir, ob der aktuell betrachtete Sharer noch teilt.
-          // Dies handhabt den Fall, dass der Sharer den Raum verlässt oder aufhört zu teilen.
+          // Nach jeder Userlist-Aktualisierung die Bildschirmanzeige prüfen
+          // Dies ist wichtig, falls der aktuell angezeigte Sharer den Raum verlässt
+          // oder aufhört zu teilen (Status wird in der Liste aktualisiert vom Server).
           if (state.currentlyViewingPeerId) {
-               // Finde den User in der NEUEN Liste
-               const sharerStillSharing = state.allUsersList.some(user => user.id === state.currentlyViewingPeerId && user.sharingStatus);
+               // Finde den User in der NEUEN Liste und prüfe seinen Sharing-Status
+               const sharerUser = state.allUsersList.find(user => user.id === state.currentlyViewingPeerId);
+               const sharerStillSharing = sharerUser && sharerUser.sharingStatus;
 
                if (!sharerStillSharing) {
                     console.log(`[UI] Aktuell betrachteter Sharer (${state.currentlyViewingPeerId}) teilt laut Userliste nicht mehr. Stoppe Anzeige.`);
-                    // Rufe die Stopp-Logik auf, simuliere einen Klick mit forceStop
-                    handleViewScreenClick({ target: { dataset: { peerId: state.currentlyViewingPeerId } } }, true); // forceStop = true
+                    // Rufe die Stopp-Logik auf, simuliere einen Klick mit forceStop = true
+                    handleViewScreenClick({ target: { dataset: { peerId: state.currentlyViewingPeerId } } }, true);
                } else {
                    // Der Sharer teilt noch. Stelle sicher, dass der "Anzeige stoppen" Button aktiv ist.
                    const viewingButton = document.querySelector(`#userList li .view-screen-button[data-peer-id='${state.currentlyViewingPeerId}']`);
@@ -491,12 +315,13 @@ document.addEventListener('DOMContentLoaded', () => {
                        viewingButton.textContent = 'Anzeige stoppen';
                        viewingButton.classList.remove('view');
                        viewingButton.classList.add('stop');
+                       viewingButton.disabled = false; // Sicherstellen, dass er nicht disabled ist
                    }
                    // Deaktiviere andere "Ansehen" Buttons, falls vorhanden
                     state.allUsersList.forEach(user => {
                          if (user.id !== state.socketId && user.sharingStatus && user.id !== state.currentlyViewingPeerId) {
-                              const otherViewButton = document.querySelector(`#userList li .view-screen-button[data-peer-id='${user.id}']`);
-                              if (otherViewButton) otherViewButton.disabled = true;
+                           const otherViewButton = document.querySelector(`#userList li .view-screen-button[data-peer-id='${user.id}']`);
+                           if (otherViewButton) otherViewButton.disabled = true;
                          }
                     });
                }
@@ -513,687 +338,69 @@ document.addEventListener('DOMContentLoaded', () => {
     } // Ende updateUserList
 
 
-    // ... (updateTypingIndicatorDisplay bleibt gleich) ...
-    // ... (updateRemoteAudioControls, ensureRemoteAudioElementExists, removeRemoteAudioElement bleiben gleich) ...
-    // ... (toggleLocalAudioMute, updateLocalMuteButtonUI, toggleRemoteAudioMute bleiben gleich) ...
-
-
-    // --- WebRTC Logic (Multi-Peer Audio + Optional Screen Share Viewing) ---
-
-    // ... (setupLocalAudioStream, stopLocalAudioStream bleiben gleich) ...
-
-    // Startet die Bildschirmteilung (Sender)
-    async function startScreenSharing() {
-        console.log("[WebRTC] startScreenSharing aufgerufen.");
-        if (!state.connected) {
-             console.warn("[WebRTC] Nicht verbunden, kann Bildschirm nicht teilen.");
-             return false;
-        }
-        if (state.isSharingScreen) {
-             console.warn("[WebRTC] Bildschirm wird bereits geteilt.");
-             return true;
-        }
-
-        try {
-             // Hole den Bildschirmstream (mit Video und optional Audio)
-             const stream = await navigator.mediaDevices.getDisplayMedia({
-                 video: { cursor: "always", frameRate: { ideal: 10, max: 15 } }, // Optionen für Video
-                 audio: true // Versuche auch System-Audio zu bekommen
-             });
-             state.screenStream = stream;
-             state.isSharingScreen = true;
-             console.log(`[WebRTC] Bildschirmstream erhalten: ${stream.id}. Tracks: Video: ${stream.getVideoTracks().length}, Audio: ${stream.getAudioTracks().length}`);
-
-             // Stoppe den lokalen Mikrofonstream, wenn ein Screen-Audio-Track vorhanden ist.
-             const screenAudioTrack = stream.getAudioTracks()[0];
-             if (screenAudioTrack && state.localAudioStream) {
-                  console.log("[WebRTC] Bildschirmstream hat Audio. Stoppe lokalen Mikrofonstream.");
-                 stopLocalAudioStream(); // Stoppt Mikrofon-Tracks und setzt localAudioStream auf null
-                 // Lokaler Mute Button wird durch stopLocalAudioStream versteckt
-             } else {
-                  console.log("[WebRTC] Bildschirmstream hat kein Audio oder Mikrofon war nicht aktiv. Mikrofon bleibt/ist inaktiv.");
-                 // Wenn kein Screen-Audio, bleibt der lokale Mute Button sichtbar (falls aktiv)
-             }
-
-
-             // Füge die Tracks des Screen-Streams zu allen PeerConnections hinzu
-             state.peerConnections.forEach(pc => {
-                  addLocalStreamTracksToPeerConnection(pc, state.screenStream); // Füge Screen-Tracks hinzu
-             });
-
-             // Event Listener für das Ende der Bildschirmteilung (z.B. durch Browser UI)
-             const screenVideoTrack = stream.getVideoTracks()[0];
-             if (screenVideoTrack) {
-                 screenVideoTrack.onended = () => {
-                     console.log("[WebRTC] Bildschirmteilung beendet durch Browser UI.");
-                     if (state.isSharingScreen) { // Sicherstellen, dass unser State noch "sharing" ist
-                         toggleScreenSharing(); // Rufe toggle auf, um sauber zu beenden
-                     }
-                 };
-                  console.log("[WebRTC] onended Listener für Screen Video Track hinzugefügt.");
-             } else {
-                  console.warn("[WebRTC] Kein Screen Video Track gefunden, onended Listener konnte nicht hinzugefügt werden.");
-             }
-
-             // Sende Signal an ALLE (inklusive sich selbst) dass ich anfange zu teilen
-             // Der Server speichert den Status und sendet die aktualisierte userListUpdate.
-             socket.emit('screenShareStatus', { sharing: true });
-             console.log("[Socket.IO] Sende 'screenShareStatus: true'.");
-
-             updateShareScreenButtonUI(); // Button UI aktualisieren
-
-             return true; // Erfolgreich
-        } catch (err) {
-             console.error('[WebRTC] Fehler beim Starten der Bildschirmteilung:', err.name, err.message);
-             let errorMessage = `Bildschirmfreigabe fehlgeschlagen: ${err.message}.`;
-             if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                  errorMessage = "Bildschirmfreigabe verweigert. Bitte erlaube den Zugriff in den Browser-Einstellungen.";
-             } else if (err.name === 'AbortError') {
-                  errorMessage = "Bildschirmfreigabe abgebrochen."; // Benutzer hat abgebrochen
-             }
-             displayError(errorMessage);
-
-             state.screenStream = null;
-             state.isSharingScreen = false;
-             setupLocalAudioStream(); // Stelle lokalen Audio-Stream wieder her
-
-             updateShareScreenButtonUI(); // Button UI zurücksetzen
-
-             // Optional: Signalisiere anderen, dass Teilen fehlgeschlagen/abgebrochen wurde, falls es jemals auf true war?
-             // Oder der Server setzt es eh auf false, wenn er merkt, dass kein Stream kommt?
-             // Wir senden ein false Signal, damit der Status beim Server konsistent ist.
-             // Wenn startScreenSharing fehlschlägt, senden wir sofort ein false Signal.
-             socket.emit('screenShareStatus', { sharing: false }); // Status ist false
-
-
-             return false; // Fehlgeschlagen
-        }
-    }
-
-    // Stoppt die Bildschirmteilung (Sender)
-    function stopScreenSharing(sendSignal = true) {
-         console.log(`[WebRTC] stopScreenSharing aufgerufen. sendSignal: ${sendSignal}.`);
-         if (!state.isSharingScreen) {
-             console.warn("[WebRTC] stopScreenSharing: Bildschirm wird nicht geteilt.");
-             return;
-         }
-
-         if (state.screenStream) {
-             console.log(`[WebRTC] Stoppe Tracks im Bildschirmstream (${state.screenStream.id}).`);
-             state.screenStream.getTracks().forEach(track => {
-                  console.log(`[WebRTC] Stoppe Screen Track ${track.id} (${track.kind}).`);
-                  track.stop(); // WICHTIG: Den Track stoppen, damit die Freigabe beendet wird!
-             });
-             state.screenStream = null;
-             console.log("[WebRTC] screenStream ist jetzt null.");
-         } else {
-              console.log("[WebRTC] stopScreenSharing: screenStream war bereits null.");
-         }
-
-         state.isSharingScreen = false;
-         console.log("[WebRTC] isSharingScreen ist jetzt false.");
-
-
-         // Stelle den lokalen Audio-Stream (Mikrofon) wieder her
-         setupLocalAudioStream(); // Startet Mikrofon neu und fügt Tracks zu PCs hinzu
-
-
-         // Sende Signal an ALLE (inklusive sich selbst) dass ich aufgehört habe zu teilen (wenn gewünscht)
-         if (sendSignal && socket && state.connected) {
-             socket.emit('screenShareStatus', { sharing: false });
-             console.log("[Socket.IO] Sende 'screenShareStatus: false'.");
-         }
-
-          updateShareScreenButtonUI(); // Button UI aktualisieren
-    }
-
-    // Umschalten der Bildschirmteilung (Sender)
-    async function toggleScreenSharing() {
-        console.log(`[WebRTC] toggleScreenSharing aufgerufen. Aktueller State isSharingScreen: ${state.isSharingScreen}`);
-        if (!state.connected || !UI.shareScreenBtn) {
-             console.warn("[WebRTC] Nicht verbunden oder Button nicht gefunden.");
-             return;
-        }
-
-        UI.shareScreenBtn.disabled = true; // Button während des Vorgangs deaktivieren
-
-        if (state.isSharingScreen) {
-            stopScreenSharing(true); // Stoppe lokal und sende Signal
+    // Aktualisiert den "schreibt..." Indikator
+    function updateTypingIndicatorDisplay() {
+        if (!UI.typingIndicator) return;
+        const typingUsernames = state.typingUsers;
+        if (typingUsernames && typingUsernames.size > 0) {
+            const othersTyping = Array.from(typingUsernames).filter(name => name !== state.username);
+            if (othersTyping.length > 0) {
+                 const usersString = othersTyping.map(escapeHTML).join(', ');
+                 UI.typingIndicator.textContent = `${usersString} schreibt...`;
+                 UI.typingIndicator.style.display = 'block';
+            } else {
+                 UI.typingIndicator.style.display = 'none';
+            }
         } else {
-            await startScreenSharing(); // Startet lokal und sendet Signal bei Erfolg
-            // updateShareScreenButtonUI wird in start/stopScreenSharing aufgerufen
+            UI.typingIndicator.style.display = 'none';
         }
-
-        UI.shareScreenBtn.disabled = false; // Button nach Vorgang wieder aktivieren
     }
 
-     // Aktualisiert die UI des Bildschirm teilen Buttons (Sender)
-     function updateShareScreenButtonUI() {
-         if (UI.shareScreenBtn) {
-             UI.shareScreenBtn.textContent = state.isSharingScreen ? 'Teilen beenden' : '🖥 Bildschirm teilen';
-             UI.shareScreenBtn.classList.toggle('active', state.isSharingScreen);
-             // Der 'hidden' Status wird in updateUIAfterConnect/Disconnect gehandhabt.
-         }
-     }
+    // Aktualisiert die dynamische UI für die Audio-Steuerung der Remote-Peers
+    function updateRemoteAudioControls(remoteUsers = []) {
+         if (!UI.remoteAudioControls) return;
 
-
-    // Erstellt eine neue RTCPeerConnection für einen spezifischen Peer
-    async function createPeerConnection(peerId) {
-        console.log(`[WebRTC] createPeerConnection aufgerufen für Peer: ${peerId}.`);
-        // Wenn bereits eine PC für diesen Peer existiert, gib sie zurück (sollte durch updatePeerConnections gehandhabt werden)
-        if (state.peerConnections.has(peerId)) {
-            console.warn(`[WebRTC] PeerConnection mit ${peerId} existiert bereits. Gebe vorhandene zurück.`);
-            return state.peerConnections.get(peerId);
-        }
-
-        console.log(`[WebRTC] Erstelle neue RTCPeerConnection für Peer: ${peerId}`);
-        const pc = new RTCPeerConnection(CONFIG.RTC_CONFIGURATION);
-        state.peerConnections.set(peerId, pc); // Speichere die PC im State
-
-        // ICE Candidate Handling: Sende Kandidaten über Socket.IO an den Signaling Server
-        pc.onicecandidate = event => {
-            if (event.candidate && socket && state.connected) {
-                 // console.log(`[WebRTC] Sende ICE candidate zu Peer ${peerId}.`); // Zu viele Logs
-                // Sende das Signal über den Server an den spezifischen Peer
-                socket.emit('webRTC-signal', {
-                    to: peerId,
-                    type: 'candidate',
-                    payload: event.candidate // Das RTCIceCandidate Objekt
-                });
-            } else if (!event.candidate) {
-                console.log(`[WebRTC] ICE candidate gathering für Peer ${peerId} beendet.`);
-            }
-        };
-
-        // Remote Track Handling: Empfängt Tracks (Audio ODER Video) von einem Peer
-        pc.ontrack = event => {
-            console.log(`[WebRTC] Empfange remote track von Peer ${peerId}. Track Kind: ${event.track.kind}, Stream ID(s): ${event.streams ? event.streams.map(s => s.id).join(', ') : 'No Stream'}`);
-
-             // Stelle sicher, dass ein MediaStream für diesen Peer in state.remoteStreams existiert
-             let remoteStream = state.remoteStreams.get(peerId);
-             if (!remoteStream) {
-                 remoteStream = new MediaStream();
-                 state.remoteStreams.set(peerId, remoteStream);
-                  console.log(`[WebRTC] Erstelle neuen remoteStream ${remoteStream.id} für Peer ${peerId}.`);
-             }
-
-             // Füge den empfangenen Track zum remoteStream für diesen Peer hinzu
-             // Nur hinzufügen, wenn der Track noch nicht im Stream ist (kann bei ontrack mehrmals gefeuert werden)
-             if (!remoteStream.getTrackById(event.track.id)) {
-                 console.log(`[WebRTC] Füge Track ${event.track.id} (${event.track.kind}) zu remoteStream ${remoteStream.id} für Peer ${peerId} hinzu.`);
-                 remoteStream.addTrack(event.track);
-             } else {
-                 console.log(`[WebRTC] Track ${event.track.id} (${event.track.kind}) ist bereits in remoteStream ${remoteStream.id} für Peer ${peerId}.`);
-             }
-
-
-            if (event.track.kind === 'audio') {
-                // Audio Track Handling: Verbinde mit dem unsichtbaren Audio-Element
-                 console.log(`[WebRTC] Track ${event.track.id} ist Audio.`);
-                 const audioElement = ensureRemoteAudioElementExists(peerId);
-                 // Der remoteStream enthält jetzt den Audio-Track (und ggf. andere Tracks)
-                 // Verbinde den Stream mit dem Audio-Element
-                 audioElement.srcObject = remoteStream; // Verbinde den Stream, der jetzt Audio enthält
-                 audioElement.play().catch(e => console.warn(`[WebRTC] Fehler beim Abspielen von Remote Audio für Peer ${peerId}:`, e));
-
-                 event.track.onended = () => console.log(`[WebRTC] Remote Audio Track ${event.track.id} von Peer ${peerId} beendet.`);
-                 event.track.onmute = () => console.log(`[WebRTC] Remote Audio Track ${event.track.id} von Peer ${peerId} gemutet.`);
-                 event.track.ounmute = () => console.log(`[WebRTC] Remote Audio Track ${event.track.id} von Peer ${peerId} entmutet.`);
-
-
-            } else if (event.track.kind === 'video') {
-                // Video Track Handling: Dieser Track kommt vom Remote-Peer
-                console.log(`[WebRTC] Track ${event.track.id} ist Video. Von Peer ${peerId}.`);
-
-                 // Wenn dieser Peer der ist, dessen Bildschirm wir gerade ansehen,
-                 // dann aktualisiere die Anzeige mit diesem Stream.
-                 // Dies ist wichtig, falls der Stream neu verhandelt wird, während wir ihn anschauen.
-                 if (state.currentlyViewingPeerId === peerId) {
-                     console.log(`[WebRTC] Erhaltener Video Track von aktuell betrachtetem Peer ${peerId}. Aktualisiere Anzeige.`);
-                     // updateRemoteScreenDisplay holt den aktuellen Stream aus remoteStreams.
-                     updateRemoteScreenDisplay(peerId);
-                 }
-
-
-                 // Event Listener für das Ende des Remote-Video-Tracks (wenn der Peer aufhört zu teilen)
-                 event.track.onended = () => {
-                     console.log(`[WebRTC] Remote Video Track ${event.track.id} von Peer ${peerId} beendet.`);
-                     // Wenn der Stream des Peers keine Video-Tracks mehr hat, und wir seinen Bildschirm ansehen,
-                     // beende die Anzeige.
-                     const remoteStreamForPeer = state.remoteStreams.get(peerId);
-                     if (remoteStreamForPeer && remoteStreamForPeer.getVideoTracks().length === 0) {
-                         console.log(`[WebRTC] Peer ${peerId} sendet keine Video-Tracks mehr. Aktualisiere Bildschirmanzeige.`);
-                          if (state.currentlyViewingPeerId === peerId) {
-                               console.log(`[WebRTC] Der Peer (${peerId}), dessen Bildschirm ich ansehe, sendet keine Video-Tracks mehr. Stoppe Anzeige.`);
-                               // Simuliere Klick auf "Anzeige stoppen" für diesen Peer
-                               handleViewScreenClick({ target: { dataset: { peerId: peerId } } }, true); // forceStop = true
-                          }
-                     }
-                 };
-
-                  event.track.onmute = () => console.log(`[WebRTC] Remote Video Track ${event.track.id} von Peer ${peerId} gemutet.`);
-                  event.track.ounmute = () => console.log(`[WebRTC] Remote Video Track ${event.track.id} von Peer ${peerId} entmutet.`);
-            }
-
-             // Listener, wenn ein Track aus dem empfangenen Stream entfernt wird (z.B. bei replaceTrack(null))
-             // Dies kann passieren, wenn der Sender die Art des Streams ändert (z.B. von Screen auf Audio).
-             remoteStream.onremovetrack = (event) => {
-                  console.log(`[WebRTC] Track ${event.track.id} von Peer ${peerId} aus Stream ${remoteStream.id} entfernt.`);
-                 // Wenn der Stream keine Tracks mehr hat, kann er aus der Map entfernt werden
-                 if (remoteStream.getTracks().length === 0) {
-                      console.log(`[WebRTC] Stream ${remoteStream.id} von Peer ${peerId} hat keine Tracks mehr. Entferne Stream aus Map.`);
-                      state.remoteStreams.delete(peerId);
-                      // Wenn dieser Peer der aktuell betrachtete war, stoppe die Anzeige
-                      if (state.currentlyViewingPeerId === peerId) {
-                           console.log(`[WebRTC] Aktuell betrachteter Peer (${peerId}) hat keine Tracks mehr im Stream. Stoppe Anzeige.`);
-                           handleViewScreenClick({ target: { dataset: { peerId: peerId } } }, true); // forceStop = true
-                      }
-                 } else {
-                     // Stream hat noch Tracks, aber einer wurde entfernt.
-                     // Wenn der entfernte Track Video war und dieser Peer betrachtet wurde,
-                     // aktualisiere die Anzeige (sollte Video entfernen, aber Audio weiterspielen).
-                      if (event.track.kind === 'video' && state.currentlyViewingPeerId === peerId) {
-                           console.log(`[WebRTC] Video Track von aktuell betrachtetem Peer (${peerId}) entfernt. Aktualisiere Anzeige.`);
-                            updateRemoteScreenDisplay(peerId); // Update Anzeige (holt Stream neu, sollte jetzt ohne Video sein)
-                      }
-                 }
-             };
-
-             // Der WebRTC-Stream wird auch durch das Ende der PeerConnection beendet
-             // oder wenn alle Tracks im Stream enden.
-        }; // Ende pc.ontrack
-
-        // ICE Connection State Change Handling: Verfolgt den Verbindungsstatus mit dem Peer
-        pc.oniceconnectionstatechange = () => {
-             if (!pc) return;
-            const pcState = pc.iceConnectionState;
-             const peerUser = state.allUsersList.find(u => u.id === peerId);
-             const peerUsername = peerUser ? peerUser.username : peerId;
-            console.log(`[WebRTC] ICE Connection Status zu Peer '${peerUsername}' (${peerId}) geändert zu: ${pcState}`);
-             switch (pcState) {
-                case "new": case "checking":
-                    // Verbindungsaufbau läuft
-                    break;
-                case "connected":
-                    console.log(`[WebRTC] ICE 'connected': Erfolgreich verbunden mit Peer '${peerUsername}'. Audio sollte fließen.`);
-                    // Optional: UI anzeigen, dass Audio aktiv ist (z.B. Symbol neben Benutzername)
-                    break;
-                case "completed":
-                    console.log(`[WebRTC] ICE 'completed': Alle Kandidaten für Peer '${peerUsername}' geprüft.`);
-                    break;
-                case "disconnected":
-                    console.warn(`[WebRTC] ICE 'disconnected': Verbindung zu Peer '${peerUsername}' unterbrochen. Versuche erneut...`);
-                    // Optional: UI anzeigen, dass Verbindung unterbrochen ist (z.B. gelber Punkt)
-                    break;
-                case "failed":
-                    console.error(`[WebRTC] ICE 'failed': Verbindung zu Peer '${peerUsername}' fehlgeschlagen.`);
-                    displayError(`Audio/Video-Verbindung zu ${peerUsername} fehlgeschlagen.`);
-                    // Bei fehlgeschlagener Verbindung, PC schließen und aus Map entfernen
-                     closePeerConnection(peerId);
-                    break;
-                case "closed":
-                    console.log(`[WebRTC] ICE 'closed': Verbindung zu Peer '${peerUsername}' wurde geschlossen.`);
-                     // Bei geschlossener Verbindung, PC aus Map entfernen und zugehörige Ressourcen entfernen
-                     closePeerConnection(peerId); // Stellt sicher, dass Bereinigung läuft
-                    break;
-            }
-        };
-
-         // Signaling State Change Handling: Verfolgt den Zustand des SDP-Austauschs
-        pc.onsignalingstatechange = () => {
-            if (!pc) return;
-            const pcState = pc.signalingState;
-             const peerUser = state.allUsersList.find(u => u.id === peerId);
-             const peerUsername = peerUser ? peerUser.username : peerId;
-            console.log(`[WebRTC] Signaling State zu Peer '${peerUsername}' (${peerId}) geändert zu: ${pcState}`);
-             // onnegotiationneeded feuert im 'stable' -> 'have-local-offer' Übergang.
-        };
-
-        // Negotiation Needed Handling: Wenn der Browser denkt, dass SDP neu ausgehandelt werden muss
-        // Dies geschieht oft nach addTrack, removeTrack, replaceTrack.
-        pc.onnegotiationneeded = async () => {
-             console.log(`[WebRTC] onnegotiationneeded Event für Peer ${peerId} ausgelöst.`);
-            // Prüfe, ob wir der "Polite" Peer sind (basierend auf ID-Vergleich), um Glare zu vermeiden.
-             const isPolite = state.socketId < peerId;
-
-             // Erstelle ein Angebot, wenn der State 'stable' ist (Polite)
-             // ODER wenn der State 'have-remote-offer' ist (Impolite, Glare Fall)
-             if (pc.signalingState === 'stable' || pc.signalingState === 'have-remote-offer') {
-
-                 if (pc.signalingState === 'have-remote-offer' && isPolite) {
-                      console.log(`[WebRTC] Peer ${peerId}: Glare Situation (have-remote-offer, Polite). Warte auf eingehendes Offer (Rollback).`);
-                      // Glare Handling: Wenn wir Polite sind und ein Remote Offer haben, warten wir,
-                      // bis unser setLocalDescription(answer) das Glare auflöst.
-                      // Ein erneutes createOffer/setLocalDescription hier würde die Situation verschlimmern.
-                       return; // Ignoriere onnegotiationneeded in diesem Glare-Fall, wenn Polite
-                 }
-
-
-                 console.log(`[WebRTC] Peer ${peerId}: Erstelle Offer. Signaling State: ${pc.signalingState}. Bin Polite? ${isPolite}.`);
-                 try {
-                     const offer = await pc.createOffer();
-                     console.log(`[WebRTC] Peer ${peerId}: Offer erstellt. Setze Local Description.`);
-                     await pc.setLocalDescription(offer);
-                     console.log(`[WebRTC] Peer ${peerId}: Local Description (Offer) gesetzt. Sende Offer an Server.`);
-
-                     // Sende das Offer über den Server an den spezifischen Peer
-                     socket.emit('webRTC-signal', {
-                         to: peerId,
-                         type: 'offer',
-                         payload: pc.localDescription // Das RTCSessionDescription Objekt (Offer)
-                     });
-
-                 } catch (err) {
-                     console.error(`[WebRTC] Peer ${peerId}: Fehler bei Offer Erstellung oder Setzung:`, err);
-                     displayError(`Fehler bei Audio/Video-Verhandlung (Offer) mit Peer ${peerId}.`);
-                     // Bei Fehler: PeerConnection schließen und aus Map entfernen
-                     closePeerConnection(peerId);
-                 }
-            } else {
-                 // Wenn der State weder stable noch have-remote-offer ist, warten wir (z.B. have-local-offer)
-                 console.log(`[WebRTC] Peer ${peerId}: Signaling State (${pc.signalingState}) erlaubt keine Offer Erstellung. Warte.`);
-            }
-        }; // Ende pc.onnegotiationneeded
-
-
-        console.log(`[WebRTC] PeerConnection Objekt für Peer ${peerId} erstellt.`);
-        return pc;
-    }
-
-    // Fügt die Tracks des LOKALEN STREAMS (Mikro oder Screen) zu einer PeerConnection hinzu
-    // Verwendet replaceTrack, um existierende Sender desselben Typs zu ersetzen.
-    function addLocalStreamTracksToPeerConnection(pc, streamToAdd) {
-        console.log(`[WebRTC] addLocalStreamTracksToPeerConnection aufgerufen. Stream ID: ${streamToAdd ? streamToAdd.id : 'null'}.`);
-        if (!pc) {
-            console.warn("[WebRTC] addLocalStreamTracksToPeerConnection: PeerConnection ist null.");
-            return;
-        }
-
-        const senders = pc.getSenders();
-        const tracksToAdd = streamToAdd ? streamToAdd.getTracks() : [];
-
-        console.log(`[WebRTC] PC hat ${senders.length} Sender. Stream hat ${tracksToAdd.length} Tracks.`);
-
-        // Gehe durch die Tracks, die HINZUGEFÜGT werden sollen (aus dem neuen Stream)
-        tracksToAdd.forEach(track => {
-            const existingSender = senders.find(s => s.track && s.track.kind === track.kind);
-
-            if (existingSender) {
-                // Sender für diesen Track-Typ existiert bereits -> Track ersetzen
-                if (existingSender.track !== track) { // Nur ersetzen, wenn der Track anders ist
-                     console.log(`[WebRTC] Ersetze Track ${track.kind} im Sender (${existingSender.track?.id || 'none'}) durch Track ${track.id}.`);
-                    existingSender.replaceTrack(track).catch(e => {
-                        console.error(`[WebRTC] Fehler beim Ersetzen des Tracks ${track.kind}:`, e);
-                         // Bei Fehler beim Ersetzen kann man versuchen, den Sender zu entfernen und neu hinzuzufügen.
-                         // Einfachheit halber loggen wir nur.
-                    });
-                } else {
-                    console.log(`[WebRTC] Track ${track.kind} (${track.id}) ist bereits im Sender. Kein Ersetzen nötig.`);
-                }
-            } else {
-                // Sender für diesen Track-Typ existiert nicht -> Track hinzufügen
-                console.log(`[WebRTC] Füge neuen Track ${track.kind} (${track.id}) hinzu.`);
-                 // addTrack erstellt einen neuen Sender. Dies löst onnegotiationneeded aus.
-                pc.addTrack(track, streamToAdd); // streamToAdd hier als optionalen Stream-Kontext
-            }
-        });
-
-        // Gehe durch die VORHANDENEN Sender, um Tracks zu entfernen, die NICHT mehr im Stream sind
-        senders.forEach(sender => {
-            // Prüfe, ob der Sender einen Track hat UND ob dieser Track NICHT im streamToAdd enthalten ist
-            // Wir vergleichen anhand der Track ID.
-            if (sender.track && !tracksToAdd.some(track => track.id === sender.track.id)) {
-                 const trackKind = sender.track.kind;
-                 // Der Track des Senders ist NICHT mehr im streamToAdd
-                 // Entferne den Sender (der Track im ursprünglichen Stream wird nicht gestoppt)
-                 console.log(`[WebRTC] Entferne Sender für Track ${sender.track.id} (${trackKind}), da er nicht mehr im aktuellen Stream ist.`);
-                pc.removeTrack(sender); // Entfernt den Sender. Dies löst onnegotiationneeded aus.
-                // Die andere Seite wird durch den fehlenden Track im empfangenen Stream oder onremovetrack informiert.
-            } else if (!sender.track) {
-                 // Sender hat keinen Track (z.B. replaceTrack(null) wurde vorher aufgerufen)
-                 // Hier machen wir nichts, wenn wir gerade keine Tracks hinzufügen.
-            }
-        });
-
-
-        console.log("[WebRTC] Tracks in PC aktualisiert.");
-        // Das Hinzufügen/Entfernen/Ersetzen von Tracks sollte 'onnegotiationneeded' auslösen.
-    }
-
-
-    // Aktualisiert die Menge der PeerConnections basierend auf der aktuellen Benutzerliste
-    function updatePeerConnections(currentRemoteUsers) {
-        console.log(`[WebRTC] updatePeerConnections aufgerufen. Aktuelle Remote User: ${currentRemoteUsers.length}. Bestehende PCs: ${state.peerConnections.size}`);
-
-        // Schließe PCs für Benutzer, die nicht mehr in der Liste sind
-        state.peerConnections.forEach((pc, peerId) => {
-            const peerStillExists = currentRemoteUsers.some(user => user.id === peerId);
-            if (!peerStillExists) {
-                console.log(`[WebRTC] Peer ${peerId} nicht mehr in Userliste. Schließe PeerConnection.`);
-                closePeerConnection(peerId); // Ruft closePeerConnection für jeden Peer auf
-            }
-        });
-
-        // Erstelle PCs für neue Benutzer in der Liste
-        currentRemoteUsers.forEach(async user => {
-            if (!state.peerConnections.has(user.id)) {
-                console.log(`[WebRTC] Neuer Peer ${user.username} (${user.id}) gefunden. Erstelle PeerConnection.`);
-                const pc = await createPeerConnection(user.id);
-
-                 // Füge die Tracks des aktuellen lokalen Streams (Mikro oder Screen) zur neuen PC hinzu
-                 const currentLocalStream = state.isSharingScreen ? state.screenStream : state.localAudioStream;
-                 if (currentLocalStream) {
-                      console.log(`[WebRTC] Füge Tracks vom aktuellen lokalen Stream (${currentLocalStream.id || 'none'}) zur neuen PC (${user.id}) hinzu.`);
-                      addLocalStreamTracksToPeerConnection(pc, currentLocalStream); // Füge Tracks hinzu
-                 } else {
-                      console.log(`[WebRTC] Kein lokaler Stream zum Hinzufügen zur neuen PC (${user.id}). Tracks werden später hinzugefügt.`);
-                 }
-
-
-                 // Bestimme, ob wir der Initiator (Offer-Ersteller) sein sollen
-                 // Der Peer mit der kleineren ID initiiert (Polite/Impolite)
-                 const shouldInitiateOffer = state.socketId < user.id;
-                 if (shouldInitiateOffer) {
-                      console.log(`[WebRTC] Bin Initiator für Peer ${user.id}. Erstelle initiales Offer.`);
-                      // onnegotiationneeded wird getriggert und das Offer erstellen und senden
-                 } else {
-                     console.log(`[WebRTC] Bin Receiver für Peer ${user.id}. Warte auf Offer.`);
-                 }
-            } else {
-                // Peer existiert bereits. Stelle sicher, dass die Tracks aktualisiert werden,
-                // falls sich der lokale Stream geändert hat (z.B. Start/Stop Teilen).
-                 const pc = state.peerConnections.get(user.id);
-                 const currentLocalStream = state.isSharingScreen ? state.screenStream : state.localAudioStream;
-                 if (currentLocalStream) {
-                     // console.log(`[WebRTC] Peer ${user.id} existiert. Stelle sicher, dass Tracks vom Stream (${currentLocalStream.id || 'none'}) aktuell sind.`); // Zu viele Logs
-                      addLocalStreamTracksToPeerConnection(pc, currentLocalStream); // Aktualisiere Tracks
-                 } else {
-                      console.log(`[WebRTC] Peer ${user.id} existiert, aber kein lokaler Stream zum Aktualisieren.`);
-                       // Wenn kein lokaler Stream da ist, stelle sicher, dass keine Tracks gesendet werden (replace mit null)
-                       addLocalStreamTracksToPeerConnection(pc, null); // Entferne alle Tracks
-                 }
-            }
-        }); // Ende currentRemoteUsers.forEach
-    }
-
-
-    // Schließt eine spezifische PeerConnection und bereinigt zugehörige Ressourcen
-    function closePeerConnection(peerId) {
-        console.log(`[WebRTC] closePeerConnection aufgerufen für Peer: ${peerId}.`);
-        const pc = state.peerConnections.get(peerId);
-
-        if (pc) {
-            console.log(`[WebRTC] Schließe PeerConnection mit ${peerId}.`);
-             // Entferne alle Sender (der Track im ursprünglichen Stream wird NICHT gestoppt)
-             pc.getSenders().forEach(sender => {
-                 if (sender.track) {
-                     pc.removeTrack(sender);
-                 }
-             });
-
-            pc.close();
-            state.peerConnections.delete(peerId);
-             console.log(`[WebRTC] PeerConnection mit ${peerId} gelöscht.`);
-        } else {
-             console.log(`[WebRTC] Keine PeerConnection mit ${peerId} zum Schließen gefunden.`);
-        }
-
-         // Bereinige zugehörige Ressourcen für diesen Peer
-         removeRemoteAudioElement(peerId); // Entfernt das Audio-Element
-
-         // Entferne den empfangenen Stream für diesen Peer aus der Map und stoppe seine Tracks
-         if (state.remoteStreams.has(peerId)) {
-              console.log(`[WebRTC] Entferne remoteStream für Peer ${peerId}.`);
-              const streamToRemove = state.remoteStreams.get(peerId);
-              streamToRemove.getTracks().forEach(track => track.stop()); // Stoppe die Tracks im Stream
-              state.remoteStreams.delete(peerId);
-         }
-
-         // Wenn der geteilte Bildschirm von diesem Peer kam ODER wir ihn gerade ansehen, blende ihn aus
-         if (state.currentlyViewingPeerId === peerId) {
-              console.log(`[WebRTC] Geschlossener Peer ${peerId} wurde betrachtet. Stoppe Anzeige.`);
-              // Rufe die Stopp-Logik auf, simuliere einen Klick mit forceStop
-              handleViewScreenClick({ target: { dataset: { peerId: peerId } } }, true); // forceStop = true
-              // currentlyViewingPeerId wird in handleViewScreenClick auf null gesetzt
-         } else {
-             // Wenn der Peer, der gerade geschlossen wurde, NICHT der war, der betrachtet wurde,
-             // müssen wir sicherstellen, dass falls er geteilt hat, die Info aus der Userliste verschwindet
-             // und der Button "Ansehen" entfernt wird. Das passiert automatisch durch userListUpdate.
-         }
-    }
-
-    function closeAllPeerConnections() {
-        console.log("[WebRTC] closeAllPeerConnections aufgerufen.");
-        // Iteriere über eine Kopie der Keys, da closePeerConnection die Map ändert
-        Array.from(state.peerConnections.keys()).forEach(peerId => {
-            closePeerConnection(peerId); // Ruft closePeerConnection für jeden Peer auf
-        });
-         state.peerConnections.clear(); // Sicherstellen, dass die Map leer ist
-         console.log("[WebRTC] Alle PeerConnections geschlossen.");
-
-         // Stelle sicher, dass alle empfangenen Streams gestoppt und gelöscht werden
-         state.remoteStreams.forEach(stream => {
-             stream.getTracks().forEach(track => track.stop());
+         const mutedStates = new Map();
+         state.remoteAudioElements.forEach((audioEl, peerId) => {
+             mutedStates.set(peerId, audioEl.muted);
          });
-         state.remoteStreams.clear();
-          console.log("[WebRTC] Alle empfangenen Streams gestoppt und gelöscht.");
 
-          // Stelle sicher, dass die Remote-Bildschirmanzeige ausgeschaltet ist
-          updateRemoteScreenDisplay(null); // Setzt auch currentlyViewingPeerId auf null
+         UI.remoteAudioControls.innerHTML = '';
 
+         if (remoteUsers.length > 0) {
+             const title = document.createElement('h3');
+             title.textContent = 'Sprach-Teilnehmer';
+             UI.remoteAudioControls.appendChild(title);
+
+             remoteUsers.forEach(user => {
+                 const itemDiv = document.createElement('div');
+                 itemDiv.classList.add('remote-audio-item');
+                 itemDiv.id = `remoteAudioItem_${user.id}`;
+
+                 const nameSpan = document.createElement('span');
+                 nameSpan.textContent = escapeHTML(user.username);
+                 nameSpan.style.color = escapeHTML(user.color || getUserColor(user.id));
+                 itemDiv.appendChild(nameSpan);
+
+                 const muteBtn = document.createElement('button');
+                 muteBtn.textContent = 'Stumm schalten';
+                 muteBtn.classList.add('mute-btn');
+                 muteBtn.dataset.peerId = user.id;
+                 muteBtn.addEventListener('click', toggleRemoteAudioMute);
+
+                 const isMuted = mutedStates.has(user.id) ? mutedStates.get(user.id) : false;
+                 muteBtn.classList.toggle('muted', isMuted);
+                 muteBtn.textContent = isMuted ? 'Stumm AN' : 'Stumm schalten';
+
+
+                 itemDiv.appendChild(muteBtn);
+
+                 UI.remoteAudioControls.appendChild(itemDiv);
+
+                  ensureRemoteAudioElementExists(user.id); // Sicherstellen, dass Audio-Element existiert
+             });
+         }
     }
-
-
-    // --- Chat Logic ---
-    // ... (sendMessage, appendMessage, sendTyping bleiben gleich) ...
-
-
-    // --- Remote Screen Viewing Logic ---
-
-    // Behandelt das Klicken auf den "Bildschirm ansehen" / "Anzeige stoppen" Button
-    function handleViewScreenClick(event, forceStop = false) {
-         console.log(`[UI] handleViewScreenClick aufgerufen. forceStop: ${forceStop}`);
-         const clickedButton = event.target;
-         const peerId = clickedButton.dataset.peerId;
-
-         if (!peerId) {
-             console.error("[UI] handleViewScreenClick: Keine Peer ID im Dataset gefunden.");
-             return;
-         }
-
-         const isCurrentlyViewing = state.currentlyViewingPeerId === peerId;
-
-         if (isCurrentlyViewing && !forceStop) {
-             // Klick auf "Anzeige stoppen" für den aktuell betrachteten Peer
-             console.log(`[UI] Klick auf "Anzeige stoppen" für Peer ${peerId}.`);
-             // Verstecke die Anzeige
-             updateRemoteScreenDisplay(null); // Setzt currentlyViewingPeerId auf null
-
-             // Aktualisiere alle "Ansehen" Buttons für alle Sharer (aktiviere sie wieder)
-              state.allUsersList.forEach(user => {
-                  if (user.id !== state.socketId && user.sharingStatus) {
-                       const sharerButton = document.querySelector(`#userList li .view-screen-button[data-peer-id='${user.id}']`);
-                       if (sharerButton) sharerButton.disabled = false; // Alle Buttons wieder aktivieren
-                  }
-              });
-             // Der geklickte Button wird automatisch in updateRemoteScreenDisplay(null) zurückgesetzt,
-             // da updateUserList aufgerufen wird, um die UI zu aktualisieren.
-             // Oder wir machen es hier explizit:
-             clickedButton.textContent = 'Bildschirm ansehen';
-             clickedButton.classList.remove('stop');
-             clickedButton.classList.add('view');
-
-
-         } else if (!isCurrentlyViewing) {
-             // Klick auf "Bildschirm ansehen" für einen Peer
-             console.log(`[UI] Klick auf "Bildschirm ansehen" für Peer ${peerId}.`);
-
-             // Prüfe, ob dieser Peer auch tatsächlich teilt (sollte durch Button-Anzeige garantiert sein)
-             const sharerUser = state.allUsersList.find(user => user.id === peerId && user.sharingStatus);
-             // Hole den empfangenen Stream für diesen Peer
-             const sharerStream = state.remoteStreams.get(peerId);
-
-             if (sharerUser && sharerStream && sharerStream.getVideoTracks().length > 0) {
-                 // Peer teilt und wir haben einen Stream mit Video -> Anzeige starten
-                  console.log(`[UI] Peer ${peerId} teilt und Stream ist verfügbar. Zeige Bildschirm an.`);
-                 // **Wichtig:** Wenn bereits ein ANDERER Bildschirm angezeigt wird, stoppe diesen zuerst.
-                  if (state.currentlyViewingPeerId !== null && state.currentlyViewingPeerId !== peerId) {
-                      console.log(`[UI] Stoppe vorherige Anzeige von Peer ${state.currentlyViewingPeerId}.`);
-                      handleViewScreenClick({ target: { dataset: { peerId: state.currentlyViewingPeerId } } }, true); // forceStop = true
-                  }
-
-
-                 updateRemoteScreenDisplay(peerId); // Startet die Anzeige für diesen Peer
-
-                 // Deaktiviere die "Ansehen" Buttons für alle ANDEREN Sharer
-                 state.allUsersList.forEach(user => {
-                      if (user.id !== state.socketId && user.sharingStatus && user.id !== peerId) {
-                           const otherViewButton = document.querySelector(`#userList li .view-screen-button[data-peer-id='${user.id}']`);
-                           if (otherViewButton) otherViewButton.disabled = true; // Andere Buttons deaktivieren
-                      }
-                 });
-
-                 // Aktualisiere den geklickten Button zu "Anzeige stoppen"
-                  clickedButton.textContent = 'Anzeige stoppen';
-                  clickedButton.classList.remove('view');
-                  clickedButton.classList.add('stop');
-
-
-             } else {
-                 // Peer teilt nicht mehr oder wir haben den Stream nicht (mehr)
-                 console.warn(`[UI] Peer ${peerId} teilt nicht oder Stream nicht verfügbar. Kann Bildschirm nicht ansehen.`);
-                 displayError(`Bildschirm von ${sharerUser ? escapeHTML(sharerUser.username) : 'diesem Benutzer'} kann nicht angesehen werden.`);
-                 // Blende Anzeige aus, falls fälschlicherweise etwas angezeigt wurde
-                 updateRemoteScreenDisplay(null);
-                 // Setze den Button zurück (dies wird auch durch userListUpdate gehandhabt, aber zur Sicherheit)
-                 clickedButton.textContent = 'Bildschirm ansehen';
-                 clickedButton.classList.remove('stop');
-                 clickedButton.classList.add('view');
-            }
-         } else if (isCurrentlyViewing && forceStop) {
-              // Force stop case (triggered internally when sharer leaves or stops, or when viewing another screen)
-              console.log(`[UI] Force Stop Anzeige für Peer ${peerId}.`);
-              // Verstecke die Anzeige und setze den State zurück
-              updateRemoteScreenDisplay(null); // Setzt currentlyViewingPeerId auf null
-
-              // Finde den Button für diesen Peer in der Userliste und setze ihn zurück
-              const viewButton = document.querySelector(`#userList li .view-screen-button[data-peer-id='${peerId}']`);
-               if (viewButton) {
-                    viewButton.textContent = 'Bildschirm ansehen';
-                    viewButton.classList.remove('stop');
-                    viewButton.classList.add('view');
-               }
-
-               // Aktiviere Buttons für andere Sharer wieder
-                state.allUsersList.forEach(user => {
-                     if (user.id !== state.socketId && user.sharingStatus) {
-                           const otherViewButton = document.querySelector(`#userList li .view-screen-button[data-peer-id='${user.id}']`);
-                           if (otherViewButton) otherViewButton.disabled = false; // Andere Buttons aktivieren
-                     }
-                });
-         }
-    } // Ende handleViewScreenClick
-
 
     // Aktualisiert die Anzeige des geteilten Remote-Bildschirms
     // Zeigt den Stream des Peers an, dessen ID in peerIdToDisplay steht (oder blendet aus, wenn null)
@@ -1202,16 +409,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
          if (!UI.remoteScreenContainer || !UI.remoteScreenVideo || !UI.remoteScreenSharerName) {
              console.warn("[UI] updateRemoteScreenDisplay: Benötigte UI Elemente nicht gefunden.");
-             // Setze den State zurück, falls UI fehlt
               state.currentlyViewingPeerId = null;
               if (UI.remoteScreenVideo && UI.remoteScreenVideo.srcObject) UI.remoteScreenVideo.srcObject = null;
              if (UI.remoteScreenContainer) UI.remoteScreenContainer.classList.add('hidden');
              if (UI.remoteScreenSharerName) UI.remoteScreenSharerName.textContent = '';
+             // Optional: Vollbild verlassen
+             if (document.fullscreenElement) document.exitFullscreen();
 
              return;
          }
 
-         const sharerUser = state.allUsersList.find(u => u.id === peerIdToDisplay);
+         const sharerUser = state.allUsersList.find(user => user.id === peerIdToDisplay);
          const sharerStream = state.remoteStreams.get(peerIdToDisplay); // Holen aus Map aller empfangenen Streams
 
          // Prüfe, ob der Stream existiert und Video-Tracks hat
@@ -1248,13 +456,448 @@ document.addEventListener('DOMContentLoaded', () => {
 
              state.currentlyViewingPeerId = null; // Kein Peer wird mehr angeschaut
 
+              // Optional: Vollbild verlassen, falls aktiv (dieser Bildschirm)
+              if (document.fullscreenElement === UI.remoteScreenContainer || (UI.remoteScreenContainer && UI.remoteScreenContainer.contains(document.fullscreenElement))) {
+                   document.exitFullscreen();
+              }
          }
     }
 
 
-    // ... (ensureRemoteAudioElementExists, removeRemoteAudioElement, toggleLocalAudioMute, updateLocalMuteButtonUI, toggleRemoteAudioMute bleiben gleich) ...
+    // Stellt sicher, dass ein <audio> Element für einen Remote-Peer existiert
+    function ensureRemoteAudioElementExists(peerId) {
+        let audioElement = state.remoteAudioElements.get(peerId);
+        if (!audioElement) {
+            console.log(`[WebRTC] Erstelle neues Audio-Element für Peer ${peerId}.`);
+            audioElement = new Audio();
+            audioElement.autoplay = true;
+            audioElement.style.display = 'none';
+            // Füge es zum DOM hinzu, damit es Audio abspielen kann
+            document.body.appendChild(audioElement);
+
+            state.remoteAudioElements.set(peerId, audioElement);
+             console.log(`[WebRTC] Audio-Element für Peer ${peerId} erstellt und hinzugefügt.`);
+
+             // Setze den initialen Mute-Status basierend auf dem Button in der UI (falls er schon existiert)
+             // Oder einem gespeicherten State, falls wir lokalen Mute-Status pro Peer speichern würden (aktuell nicht der Fall)
+             const muteButton = UI.remoteAudioControls.querySelector(`.mute-btn[data-peer-id='${peerId}']`);
+             if (muteButton) {
+                  audioElement.muted = muteButton.classList.contains('muted');
+             } else {
+                  audioElement.muted = false; // Standard: nicht gemutet
+             }
+        }
+         return audioElement;
+    }
+
+    // Entfernt das Audio-Element eines Remote-Peers
+    function removeRemoteAudioElement(peerId) {
+         const audioElement = state.remoteAudioElements.get(peerId);
+         if (audioElement) {
+             console.log(`[WebRTC] Entferne Audio-Element für Peer ${peerId}.`);
+             audioElement.pause(); // Wiedergabe stoppen
+             audioElement.srcObject = null; // Stream-Verbindung trennen
+             audioElement.remove(); // Aus dem DOM entfernen
+             state.remoteAudioElements.delete(peerId);
+             console.log(`[WebRTC] Audio-Element für Peer ${peerId} entfernt.`);
+         }
+         // Entferne auch die UI Controls für diesen Peer
+         const itemDiv = document.getElementById(`remoteAudioItem_${peerId}`);
+         if (itemDiv) {
+             itemDiv.remove();
+         }
+          // Wenn keine Remote-Audio-Items mehr da sind, blende die Sektion aus (wird in updateUserList gemacht)
+    }
+
+     // Schaltet das lokale Mikrofon stumm/aktiv
+    function toggleLocalAudioMute() {
+         if (!state.localAudioStream) {
+             console.warn("[WebRTC] toggleLocalAudioMute: Lokaler Audio-Stream nicht verfügbar.");
+             // Optional: Fehlermeldung anzeigen
+             return;
+         }
+         state.localAudioMuted = !state.localAudioMuted;
+         console.log(`[WebRTC] Lokales Mikrofon: ${state.localAudioMuted ? 'Stumm' : 'Aktiv'}`);
+
+         // Setze den 'enabled'-Status für alle Audio-Tracks im lokalen Stream
+         state.localAudioStream.getAudioTracks().forEach(track => {
+             track.enabled = !state.localAudioMuted; // 'enabled = false' mutet den Track
+             console.log(`[WebRTC] Lokaler Audio Track ${track.id} enabled: ${track.enabled}`);
+         });
+
+         updateLocalMuteButtonUI();
+         // Optional: Signalisiere anderen den Mute-Status (erfordert zusätzliches Socket.IO Event)
+         // socket.emit('localMuteStatus', { muted: state.localAudioMuted });
+    }
+
+     // Aktualisiert die UI des lokalen Mute-Buttons
+     function updateLocalMuteButtonUI() {
+         const localMuteBtn = document.getElementById('localMuteBtn');
+         if (localMuteBtn) {
+             localMuteBtn.textContent = state.localAudioMuted ? 'Mikro Stumm AN' : 'Mikro stumm schalten';
+             localMuteBtn.classList.toggle('muted', state.localAudioMuted);
+             // localMuteBtn.classList.toggle('active', !state.localAudioMuted); // Optional: Zusätzliche Klasse für Aktiv-Status (für CSS)
+             // Button kann nur deaktiviert sein, wenn setupLocalAudioStream fehlgeschlagen ist
+         }
+     }
+
+     // Schaltet den Audio-Stream eines Remote-Peers lokal stumm/aktiv
+     function toggleRemoteAudioMute(event) {
+         const peerId = event.target.dataset.peerId;
+         const audioElement = state.remoteAudioElements.get(peerId);
+         if (!audioElement) {
+             console.warn(`[WebRTC] toggleRemoteAudioMute: Audio-Element für Peer ${peerId} nicht gefunden.`);
+             return;
+         }
+
+         audioElement.muted = !audioElement.muted;
+         console.log(`[WebRTC] Audio von Peer ${peerId} lokal ${audioElement.muted ? 'gemutet' : 'aktiviert'}.`);
+
+         // Aktualisiere den Button-Text/Klasse in der UI
+         event.target.textContent = audioElement.muted ? 'Stumm AN' : 'Stumm schalten';
+         event.target.classList.toggle('muted', audioElement.muted);
+
+         // Optional: Mute-Status lokal pro Peer speichern, falls die UI neu aufgebaut wird
+         // und der Status erhalten bleiben soll.
+     }
+
+
+    // --- WebSocket Logic ---
+
+    // Startet die Socket.IO Verbindung
+    function connect() {
+        console.log("[Socket.IO] connect() aufgerufen.");
+        const serverUrl = window.location.origin;
+        const roomId = state.roomId;
+        let username = UI.usernameInput.value.trim();
+
+        if (!username) username = `User${Math.floor(Math.random() * 10000)}`;
+        UI.usernameInput.value = username;
+        state.username = username; // Update state immediately
+
+        console.log(`[Socket.IO] Verbinde mit ${serverUrl} in Raum ${state.roomId} als ${state.username}`);
+
+        // Wenn Socket bereits existiert, trennen und neu erstellen
+        if (socket) {
+            console.log("[Socket.IO] Bestehende Socket-Instanz gefunden, wird getrennt.");
+            socket.disconnect(); // Dies triggert den 'disconnect' Event-Handler
+        }
+
+        // Erstelle eine neue Socket-Verbindung
+        socket = io(serverUrl, {
+            auth: { username: state.username, roomId: state.roomId }, // Sende Auth-Daten
+            transports: ['websocket'], // Bevorzuge WebSocket
+            forceNew: true // Erzwinge eine neue Verbindung (nützlich bei schnellen Reconnect-Versuchen)
+        });
+        setConnectionStatus('connecting', 'Verbinde...'); // UI Status "Verbinde..." setzen
+        setupSocketListeners(); // Socket Event Listener einrichten
+    }
+
+    // Richtet alle Socket.IO Event Listener ein
+    function setupSocketListeners() {
+        if (!socket) {
+            console.error("[Socket.IO] setupSocketListeners: Socket ist null.");
+            return;
+        }
+        console.log("[Socket.IO] setupSocketListeners aufgerufen.");
+
+        // Event: Erfolgreiche Verbindung zum Socket.IO Server
+        socket.on('connect', () => {
+            console.log('[Socket.IO] "connect" event erhalten. Socket verbunden auf Transport:', socket.io.engine.transport.name, 'Socket ID:', socket.id);
+            // Der Server sendet 'joinSuccess' nach erfolgreichem Auth und Join.
+        });
+
+        // Event: Fehler während des Verbindungsaufbaus
+        socket.on('connect_error', (err) => {
+            console.error('[Socket.IO] "connect_error" erhalten:', err.message, err.data);
+            // state.connected wird im 'disconnect' Handler auf false gesetzt
+            displayError(`Verbindungsfehler: ${err.message}. Server erreichbar?`);
+            setConnectionStatus('disconnected', 'Verbindungsfehler');
+            // Der Socket.IO Client löst bei connect_error selbst ein 'disconnect' aus.
+        });
+
+        // Event: Verbindung wurde getrennt
+        socket.on('disconnect', (reason) => {
+            console.log(`[Socket.IO] "disconnect" event erhalten: ${reason}`);
+            // state.connected wird hier auf false gesetzt
+            displayError(`Verbindung getrennt: ${reason}`);
+            // Bereinigung und UI-Reset
+            updateUIAfterDisconnect();
+        });
+
+        // Event: Erfolgreich dem Raum beigetreten (vom Server nach erfolgreichem Auth gesendet)
+        socket.on('joinSuccess', ({ users: currentUsers, id: myId }) => {
+            console.log(`[Socket.IO] "joinSuccess" event erhalten. Dein Socket ID: ${myId}, Benutzer im Raum:`, currentUsers);
+            // state.connected wird hier auf true gesetzt
+            state.socketId = myId;
+             // Finde den eigenen User in der Liste, um den Server-seitig zugewiesenen Namen/Farbe zu erhalten
+             const selfUser = currentUsers.find(u => u.id === myId);
+             if(selfUser) {
+                  state.username = selfUser.username; // Übernehme den finalen Namen vom Server
+             }
+            updateUIAfterConnect(); // UI anpassen, lokalen Stream starten etc.
+            // Die erste Benutzerliste kommt direkt hier. update PeerConnections wird von updateUserList aufgerufen.
+            updateUserList(currentUsers);
+        });
+
+        // Event: Fehler beim Versuch, dem Raum beizutreten (vom Server gesendet)
+        socket.on('joinError', ({ message }) => {
+            console.error(`[Socket.IO] "joinError" erhalten: ${message}`);
+            displayError(message);
+            // Der Server sollte nach joinError die Verbindung trennen, was den 'disconnect' Handler triggert.
+            // Falls nicht, stellt forceNew: true im connect() und der folgende disconnect() Aufruf
+            // (falls der Socket noch verbunden ist) eine Bereinigung sicher.
+            if (socket && socket.connected) {
+                 console.log("[Socket.IO] JoinError erhalten, Socket ist noch verbunden. Manuelles Trennen.");
+                 socket.disconnect(); // Manuell trennen, um disconnect Handler zu triggern
+             } else {
+                 console.log("[Socket.IO] JoinError erhalten, Socket war bereits getrennt oder wird getrennt.");
+                 // UI wird vom disconnect Handler zurückgesetzt.
+             }
+        });
+
+        // Event: Benutzerliste im Raum wurde aktualisiert (Benutzer beigetreten/verlassen)
+        socket.on('userListUpdate', (currentUsersList) => {
+            console.log("[Socket.IO] Benutzerliste aktualisiert:", currentUsersList);
+            // Diese Liste vom Server enthält jetzt auch den 'sharingStatus' für jeden Benutzer.
+            // updateUserList aktualisiert die UI, die Buttons "Bildschirm ansehen" etc.
+            // und triggert updatePeerConnections für WebRTC.
+            updateUserList(currentUsersList);
+        });
+
+        // Event: Neue Chat-Nachricht erhalten
+        socket.on('chatMessage', (message) => {
+            appendMessage(message); // Nachricht zur UI hinzufügen
+            // Sound abspielen, wenn es keine eigene Nachricht ist
+            if (message.id !== state.socketId) {
+                 console.log("[Socket.IO] Neue Nachricht von anderem Benutzer. Sound abspielen.");
+                playNotificationSound();
+            }
+        });
+
+        // Event: Tipp-Status von einem Benutzer hat sich geändert
+        socket.on('typing', ({ username, isTyping }) => {
+            if (username === state.username) return; // Ignoriere eigene Tipp-Events
+            if (isTyping) {
+                state.typingUsers.add(username);
+            } else {
+                state.typingUsers.delete(username);
+            }
+            updateTypingIndicatorDisplay(); // Aktualisiere die UI des Tipp-Indikators
+        });
+
+        // --- WebRTC Signalisierungs-Listener (Multi-Peer) ---
+        // Empfängt WebRTC Signale vom Server, die von anderen Peers gesendet wurden
+        socket.on('webRTC-signal', async ({ from, type, payload }) => {
+             // console.log(`[WebRTC Signal] Empfange '${type}' von Peer ${from}.`); // Zu viele Logs
+             if (from === state.socketId) {
+                 // console.warn("[WebRTC Signal] Empfange eigenes Signal. Ignoriere."); // Zu viele Logs
+                 return; // Ignoriere Signale von uns selbst
+             }
+
+             // Stelle sicher, dass eine PeerConnection für diesen Peer existiert
+             let pc = state.peerConnections.get(from);
+             if (!pc) {
+                 console.warn(`[WebRTC Signal] Empfange Signal von unbekanntem Peer ${from}. Erstelle PeerConnection.`);
+                 // Erstelle eine neue PC für den Peer, der uns signalisiert hat (falls sie noch nicht existiert)
+                 pc = await createPeerConnection(from);
+                 // Füge lokalen Stream hinzu, nachdem die PC erstellt wurde
+                 // addLocalStreamTracksToPeerConnection(pc, state.isSharingScreen ? state.screenStream : state.localAudioStream); // Wird durch onnegotiationneeded getriggert
+
+             }
+
+            try {
+                 if (type === 'offer') {
+                    console.log(`[WebRTC Signal] Peer ${from}: Setze Remote Description (Offer).`);
+                    const isPolite = state.socketId < from; // Bestimme, wer "Polite" ist basierend auf ID
+
+                    // Glare Handling für Polite Peer: Wenn wir Polite sind und ein lokales Offer haben,
+                    // während wir ein Remote Offer erhalten, ignorieren wir das Remote Offer.
+                    // Der Impolite Peer wird sein Offer bei 'have-local-offer' senden.
+                    if (pc.signalingState !== 'stable' && pc.localDescription && isPolite) {
+                         console.warn(`[WebRTC Signal] Peer ${from}: Glare erkannt (Polite). Ignoriere eingehendes Offer.`);
+                         // Optional: Fehler melden oder Re-Negotiation initiieren.
+                         // Für jetzt: Einfach ignorieren und hoffen, dass der Impolite Peer neu initiiert.
+                         displayError(`Glare erkannt mit Peer ${from}. Neuverhandlung könnte nötig sein.`);
+                         return;
+                    }
+
+                    // Setze das empfangene Offer als Remote Description
+                    await pc.setRemoteDescription(new RTCSessionDescription(payload));
+                    console.log(`[WebRTC Signal] Peer ${from}: Remote Description (Offer) gesetzt.`);
+
+                    // Erstelle eine Antwort (Answer) auf das Offer
+                    console.log(`[WebRTC Signal] Peer ${from}: Erstelle Answer.`);
+                    const answer = await pc.createAnswer();
+                    // Setze die Antwort als lokale Description
+                    console.log(`[WebRTC Signal] Peer ${from}: Setze Local Description (Answer).`);
+                    await pc.setLocalDescription(answer);
+                    console.log(`[WebRTC Signal] Peer ${from}: Local Description (Answer) gesetzt.`);
+
+                    // Sende die Antwort über den Server an den Offer-Sender
+                    console.log(`[WebRTC Signal] Peer ${from}: Sende Answer.`);
+                    socket.emit('webRTC-signal', { to: from, type: 'answer', payload: pc.localDescription });
+
+                 } else if (type === 'answer') {
+                     console.log(`[WebRTC Signal] Peer ${from}: Setze Remote Description (Answer).`);
+                    // Nur setzen, wenn wir ein lokales Angebot haben (have-local-offer)
+                    if (pc.signalingState === 'have-local-offer') {
+                        await pc.setRemoteDescription(new RTCSessionDescription(payload));
+                         console.log(`[WebRTC Signal] Peer ${from}: Remote Description (Answer) gesetzt.`);
+                    } else {
+                        console.warn(`[WebRTC Signal] Peer ${from}: Empfange Answer im falschen Signaling State (${pc.signalingState}). Ignoriere.`);
+                         // Kann bei Glare passieren. Ignorieren und hoffen, dass Neuverhandlung erfolgt.
+                    }
+
+                 } else if (type === 'candidate') {
+                     // console.log(`[WebRTC Signal] Peer ${from}: Füge ICE Candidate hinzu.`); // Zu viele Logs
+                     try {
+                         // Füge den empfangenen ICE Kandidaten hinzu.
+                         // Dies kann auch vor dem Setzen der Remote Description passieren;
+                         // der Browser puffert Kandidaten in diesem Fall.
+                        await pc.addIceCandidate(new RTCIceCandidate(payload));
+                        // console.log(`[WebRTC Signal] Peer ${from}: ICE Candidate erfolgreich hinzugefügt.`); // Zu viele Logs
+                     } catch (e) {
+                         console.error(`[WebRTC Signal] Peer ${from}: Fehler beim Hinzufügen des ICE Kandidaten:`, e);
+                         // Fehler können auftreten, wenn der Kandidat ungültig ist oder Remote Description nicht gesetzt werden konnte.
+                     }
+
+                 } else {
+                     console.warn(`[WebRTC Signal] Unbekannter Signal-Typ '${type}' von Peer ${from} empfangen.`);
+                 }
+            } catch (err) {
+                console.error(`[WebRTC Signal Error] Fehler bei Verarbeitung von Signal '${type}' von Peer ${from}:`, err);
+                displayError(`Fehler bei Audio/Video-Verhandlung mit Peer ${from}.`);
+                // Bei schwerwiegenden Fehlern: PeerConnection schließen und aus Map entfernen
+                // closePeerConnection(from); // Dies könnte eine Rekursion auslösen, vorsichtig verwenden
+            }
+        });
+
+        // Event: Bildschirm teilen Status Aktualisierung von einem anderen Client erhalten (vom Server weitergeleitet)
+        socket.on('screenShareStatus', ({ id, sharing }) => {
+            // Server sendet die komplette Userliste mit aktualisiertem Status an alle,
+            // was userListUpdate triggert. Die Logik in updateUserList verarbeitet den Status.
+            console.log(`[Socket.IO] screenShareStatus von ${id} erhalten: ${sharing}. (Wird von userListUpdate verarbeitet)`);
+             // Hier tun wir nichts weiter, da updateUserList() bereits aufgerufen wird
+             // und den Status aus der userListUpdate verwendet.
+        });
+
+
+    } // Ende setupSocketListeners
+
+
+    // Trennt die Socket.IO Verbindung manuell
+    function disconnect() {
+        console.log("[Socket.IO] Trenne Verbindung manuell.");
+        if (socket) {
+            socket.disconnect(); // Dies triggert den 'disconnect' Event-Handler
+        } else {
+            console.log("[Socket.IO] Kein Socket zum Trennen gefunden.");
+            updateUIAfterDisconnect(); // Stelle UI trotzdem zurück
+        }
+    }
+
+    // --- Chat Logic ---
+
+    // Sendet eine Textnachricht
+    function sendMessage() {
+        console.log("sendMessage() aufgerufen.");
+        const content = UI.messageInput.value.trim();
+        if (!content) {
+            console.log("sendMessage: Inhalt leer. Abbruch.");
+            return;
+        }
+
+        if (!socket || !state.connected) {
+            console.error("[Chat Send Error] Cannot send message. Not connected.");
+            displayError("Nicht verbunden. Nachricht kann nicht gesendet werden.");
+            return;
+        }
+
+        const message = {
+             content,
+             timestamp: new Date().toISOString(), // Zeitstempel weiterhin senden, auch wenn nicht angezeigt
+             type: 'text'
+             // Sender info (id, username, color) wird vom Server hinzugefügt
+        };
+
+        console.log(`sendMessage: Sende Textnachricht: "${message.content.substring(0, Math.min(message.content.length, 50))}..."`);
+        socket.emit('message', message); // Sende die Nachricht an den Server
+
+
+        UI.messageInput.value = ''; // Eingabefeld leeren
+        UI.messageInput.style.height = 'auto'; // Höhe zurücksetzen
+        UI.messageInput.focus(); // Fokus im Eingabefeld behalten
+        sendTyping(false); // Tipp-Status zurücksetzen
+    }
+
+    // Fügt eine eingehende (oder eigene gesendete) Nachricht zum Chat hinzu
+    function appendMessage(msg) {
+         if (!msg || !msg.content || !msg.id || !msg.username) {
+            console.warn("appendMessage: Ungültige Nachrichtendaten erhalten.", msg);
+            return;
+        }
+
+        const msgDiv = document.createElement('div');
+        msgDiv.classList.add('message');
+        // Identifiziere eigene Nachrichten anhand der Socket ID vom Server
+        const isMe = msg.id === state.socketId;
+        if (isMe) msgDiv.classList.add('me');
+
+        const nameSpan = document.createElement('span');
+        nameSpan.classList.add('name');
+        nameSpan.textContent = escapeHTML(msg.username);
+        // Verwende die Farbe vom Server oder generiere eine Fallback-Farbe
+        nameSpan.style.color = escapeHTML(msg.color || getUserColor(msg.id));
+
+        const contentDiv = document.createElement('div');
+        contentDiv.classList.add('content');
+        contentDiv.textContent = escapeHTML(msg.content);
+
+        // Zeitstempel-Logik wurde entfernt
+
+        msgDiv.appendChild(nameSpan);
+        msgDiv.appendChild(contentDiv);
+
+        UI.messagesContainer.appendChild(msgDiv); // Nachricht zum Container hinzufügen
+
+        // Automatisch nach unten scrollen, wenn es die eigene Nachricht ist oder man nahe am Ende ist
+        const isScrolledToBottom = UI.messagesContainer.scrollHeight - UI.messagesContainer.clientHeight <= UI.messagesContainer.scrollTop + 20;
+        if (isMe || isScrolledToBottom) {
+            UI.messagesContainer.scrollTop = UI.messagesContainer.scrollHeight;
+        }
+    }
+
+    // Sendet den Tipp-Status an den Server
+    function sendTyping(isTyping = true) {
+        if (!socket || !state.connected || UI.messageInput.disabled) {
+             return;
+        }
+
+        clearTimeout(state.typingTimeout); // Alten Timer löschen
+
+        socket.emit('typing', { isTyping }); // Sende den Status an den Server
+
+        if (isTyping) {
+            // Neuen Timer setzen, um nach einer Pause 'false' zu senden
+            state.typingTimeout = setTimeout(() => {
+                socket.emit('typing', { isTyping: false });
+            }, CONFIG.TYPING_TIMER_LENGTH);
+        }
+         // Wenn isTyping false ist (z.B. nach dem Senden), wird kein neuer Timer benötigt.
+    }
 
     // --- Init ---
-    initializeUI();
+    // Initialisiert die Anwendung beim Laden der Seite
+    function initializeApp() {
+        console.log("[App] initializeApp aufgerufen.");
+        initializeUI(); // UI initialisieren und Status setzen
+        // populateMicList() wird in updateUIAfterConnect aufgerufen
+    }
 
-});
+
+    // --- App Start ---
+    // App initialisieren, wenn das DOM bereit ist
+    initializeApp();
+
+}); // Ende DOMContentLoaded
