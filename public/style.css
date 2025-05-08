@@ -1,13 +1,47 @@
-/* ... (vorherige Stile) ... */
-
-/* Farben für Audio-Steuerung */
+/* Allgemeine Farbvariablen beibehalten */
 :root {
+    --primary-bg: #1a1a1a;
+    --secondary-bg: #242424;
+    --content-area-bg: #2a2a2a;
+    --content-element-bg: #333333;
+
+    --text-color: #e0e0e0;
+    --text-secondary-color: #a0a0a0;
+    --text-muted-color: #808080;
+    --text-on-accent-bg: #ffffff;
+
+    --border-color: #3d3d3d;
+    --divider-color: #444;
+
+    --accent-highlight-color: #c0c0c0;
+    --link-color: #82aaff;
+
+    --button-bg: #4a4a4a;
+    --button-hover-bg: #5a5a5a;
+    --button-text-color: var(--text-color);
+
+    --button-primary-bg: #5c5c5c;
+    --button-primary-hover-bg: #6c6c6c;
+
+    --message-bg-me: #454545;
+    --message-text-me: var(--text-color);
+    --message-bg-other: var(--content-element-bg);
+    --message-text-other: var(--text-color);
+
+    --error-bg: #d32f2f; /* Standard Fehler Rot */
+    --error-text-color: var(--text-on-accent-bg);
+    --success-bg: #388e3c;
+    --success-text-color: var(--success-text-color); /* Korrektur: sollte sich selbst referenzieren, oder direkt Farbe nutzen */
+    /* --success-text-color: var(--text-on-accent-bg); */
+
+
+    /* Farben für Audio-Steuerung */
     --audio-active-color: #4caf50;
     --audio-muted-color: #f44336; /* Standard Mute Rot */
     --audio-button-bg: var(--button-bg);
     --audio-button-hover-bg: var(--button-hover-bg);
     --audio-button-muted-bg: var(--error-bg); /* Stärkeres Rot für Mute Button */
-    --audio-button-muted-hover-bg: #a92424; /* Dunkleres Rot für Hover auf Mute */
+    --audio-button-muted-hover-bg: #a92428; /* Dunkleres Rot für Hover auf Mute */
 
     /* Farben für Bildschirmteilen */
     --share-screen-bg: #1e88e5; /* Blau für Teilen-Button */
@@ -23,10 +57,68 @@
     --sharing-indicator-color: var(--share-screen-bg); /* Farbe für das Teilen-Symbol */
 }
 
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    background-color: var(--primary-bg);
+    color: var(--text-color);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-size: 15px;
+    line-height: 1.6;
+}
 
-/* ... (Stile für body, app-container, header, status-indicator, main-content) ... */
+.app-container {
+    width: 98%;
+    max-width: 1600px;
+    height: 95vh;
+    max-height: 1000px;
+    background-color: var(--secondary-bg);
+    border-radius: 12px;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
 
-/* Sidebar Styling */
+.app-header {
+    background-color: var(--secondary-bg);
+    padding: 12px 25px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--divider-color);
+    flex-shrink: 0;
+}
+
+.app-header h1 {
+    margin: 0;
+    font-size: 1.6em;
+    color: var(--accent-highlight-color);
+    font-weight: 600;
+}
+
+.status-indicator {
+    padding: 6px 12px;
+    border-radius: 5px;
+    font-size: 0.95em;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+.status-indicator.connected { background-color: var(--success-bg); color: var(--success-text-color); }
+.status-indicator.disconnected { background-color: var(--error-bg); color: var(--error-text-color); }
+.status-indicator.connecting { background-color: #f39c12; color: white; }
+
+
+.main-content {
+    display: flex;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
 .sidebar {
     width: 300px;
     min-width: 250px;
@@ -155,27 +247,26 @@
     background-color: var(--audio-button-hover-bg);
 }
 #localMuteBtn.mute-btn.muted {
-     background-color: var(--audio-button-muted-bg); /* Stärkeres Rot */
+     background-color: var(--audio-button-muted-bg);
      color: var(--text-on-accent-bg);
 }
 #localMuteBtn.mute-btn.muted:hover {
-     background-color: var(--audio-button-muted-hover-bg); /* Dunkleres Rot */
+     background-color: var(--audio-button-muted-hover-bg);
 }
 
 /* Bildschirm teilen Button Styling (Sender) */
 #shareScreenBtn {
-    background-color: var(--share-screen-bg); /* Blau */
+    background-color: var(--share-screen-bg);
     color: var(--text-on-accent-bg);
 }
 #shareScreenBtn:hover {
-    background-color: var(--share-screen-hover-bg); /* Dunkleres Blau */
+    background-color: var(--share-screen-hover-bg);
 }
-/* Bildschirm teilen Button - Active State ("Teilen beenden") */
 #shareScreenBtn.active {
-    background-color: var(--share-screen-active-bg); /* Rot */
+    background-color: var(--share-screen-active-bg);
 }
 #shareScreenBtn.active:hover {
-     background-color: var(--share-screen-active-hover-bg); /* Dunkleres Rot */
+     background-color: var(--share-screen-active-hover-bg);
 }
 
 
@@ -249,54 +340,58 @@
     align-items: center;
     word-break: break-all;
     color: var(--text-secondary-color);
-    flex-wrap: wrap; /* Erlaube Umbruch, wenn Name + Button nicht passen */
-    gap: 8px; /* Abstand zwischen Elementen in der Liste */
+    flex-wrap: wrap;
+    gap: 8px;
 }
 #userList li .user-dot {
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    margin-right: 2px; /* Abstand reduziert, da Gap im Flexbox */
+    margin-right: 2px;
     background-color: var(--success-bg);
     flex-shrink: 0;
 }
 #userList li strong {
     color: var(--text-color);
     font-weight: 600;
-    flex-grow: 1; /* Eigener Name nimmt Platz ein */
+    flex-grow: 1;
 }
 /* Styling für den Teilen-Indikator (Icon oder Text) neben dem Namen */
 #userList li .sharing-indicator {
      font-size: 0.9em;
-     color: var(--sharing-indicator-color); /* Blaue Farbe */
+     color: var(--sharing-indicator-color);
      margin-left: 5px;
      flex-shrink: 0;
+     /* Optional: Animation oder Pulse Effekt */
+     /* animation: pulse 1.5s infinite ease-in-out; */
 }
+/* @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } } */
+
 
 /* Styling für den "Bildschirm ansehen" Button in der Benutzerliste */
 #userList li .view-screen-button {
-    padding: 4px 8px; /* Kleineres Padding */
-    font-size: 0.8em; /* Kleinere Schrift */
-    width: auto; /* Passt sich Inhalt an */
+    padding: 4px 8px;
+    font-size: 0.8em;
+    width: auto;
     margin-bottom: 0;
     border-radius: 4px;
     cursor: pointer;
     transition: background-color 0.2s ease;
     flex-shrink: 0;
 }
-#userList li .view-screen-button.view { /* Stil für "Ansehen" */
-    background-color: var(--view-screen-btn-bg); /* Blau */
+#userList li .view-screen-button.view {
+    background-color: var(--view-screen-btn-bg);
     color: var(--text-on-accent-bg);
 }
 #userList li .view-screen-button.view:hover {
-    background-color: var(--view-screen-btn-hover-bg); /* Dunkleres Blau */
+    background-color: var(--view-screen-btn-hover-bg);
 }
-#userList li .view-screen-button.stop { /* Stil für "Anzeige stoppen" */
-     background-color: var(--stop-viewing-btn-bg); /* Rot */
+#userList li .view-screen-button.stop {
+     background-color: var(--stop-viewing-btn-bg);
      color: var(--text-on-accent-bg);
 }
 #userList li .view-screen-button.stop:hover {
-     background-color: var(--stop-viewing-btn-hover-bg); /* Dunkleres Rot */
+     background-color: var(--stop-viewing-btn-hover-bg);
 }
 #userList li .view-screen-button:disabled {
      background-color: #383838;
@@ -356,7 +451,7 @@
 #remoteScreenVideo {
     display: block;
     max-width: 100%;
-    max-height: 400px; /* Maximale Höhe im nicht-Vollbild Modus */
+    max-height: 400px;
     height: auto;
     border-radius: 8px;
 }
@@ -451,7 +546,7 @@
     padding: 12px 20px;
     background-color: var(--secondary-bg);
     border-top: 1px solid var(--divider-color);
-    align-items: center; /* Vertikale Ausrichtung jetzt zentriert */
+    align-items: center;
     gap: 10px;
     flex-shrink: 0;
 }
@@ -467,8 +562,7 @@
     max-height: 120px;
     font-size: 1em;
     line-height: 1.5;
-     align-self: center; /* Stellt sicher, dass Textarea zentriert ist */
-     /* align-self: stretch; kann bei Bedarf wieder aktiviert werden, wenn vertikale Füllung gewünscht ist */
+     align-self: center;
 }
 #messageInput::placeholder {
     color: var(--text-muted-color);
@@ -483,7 +577,7 @@
     border-radius: 24px;
     padding: 12px 25px;
     min-width: 80px;
-     align-self: center; /* Stellt sicher, dass Button zentriert ist */
+     align-self: center;
 }
 
 
