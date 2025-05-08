@@ -1,7 +1,7 @@
 {
-  "name": "edmbook-chat-render",
+  "name": "edmbook-chat-app",
   "version": "1.0.0",
-  "description": "Real-time Chat Application for Render Deployment",
+  "description": "Real-time Chat and Screen Sharing Application",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
