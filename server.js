@@ -52,7 +52,7 @@ io.use((socket, next) => {
 
     socket.username = username;
     socket.roomId = roomId;
-    socket.userColor = getRandomColor(socket.id);
+    socket.userColor = getRandomColor(socket.id); // Verwende die Socket ID für eine konsistente Farbe
 
     console.log(`[Auth Success] Auth erfolgreich für: ${username} in Raum ${roomId} (Socket ID: ${socket.id})`);
     next();
@@ -83,24 +83,22 @@ io.on('connection', (socket) => {
              color: user.color,
              sharingStatus: user.sharingStatus // Sende den Sharing-Status mit!
         }));
-        io.to(roomId).emit('userListUpdate', usersToSend);
-        console.log(`[Room Update] Benutzerliste für Raum '${roomId}' aktualisiert. Benutzer: ${usersToSend.length}. Sende userListUpdate.`);
+        // FIX: Event-Name von 'userListUpdate' zu 'user list' geändert
+        io.to(roomId).emit('user list', usersToSend);
+        console.log(`[Room Update] Benutzerliste für Raum '${roomId}' aktualisiert. Benutzer: ${usersToSend.length}. Sende 'user list'.`);
     };
 
 
     // Beim Verbinden des neuen Benutzers:
-    // 1. Sende die aktuelle Liste an den neuen Benutzer (mit allen Stati, inkl. Sharing von anderen)
+    // 1. Bestätige dem neuen Benutzer die Verbindung (er erhält seine eigene ID)
+    //    Die vollständige Benutzerliste wird direkt danach per 'user list' gesendet.
     socket.emit('joinSuccess', {
-        id: socket.id,
-        users: Array.from(connectedUsers.values()).filter(user => user.roomId === socket.roomId).map(user => ({
-            id: user.id,
-            username: user.username,
-            color: user.color,
-            sharingStatus: user.sharingStatus // Auch beim JoinSuccess den Status senden
-        }))
+        id: socket.id
     });
-    // 2. Informiere die anderen im Raum über den neuen Benutzer (mit der aktualisierten Liste)
-    sendUserListUpdate(socket.roomId); // Sendet die Liste inkl. des neuen Benutzers an alle
+    console.log(`[Join Success] Sende 'joinSuccess' an neuen Benutzer ${socket.id}.`);
+
+    // 2. Informiere alle im Raum über den neuen Benutzer (mit der aktualisierten Liste)
+    sendUserListUpdate(socket.roomId);
 
 
     // Nachrichtenverarbeitung (Text)
@@ -108,7 +106,8 @@ io.on('connection', (socket) => {
         const sender = connectedUsers.get(socket.id);
         if (sender && msgData.content) {
             console.log(`[Message] Nachricht in Raum ${sender.roomId} von ${sender.username}: ${msgData.content.substring(0, 50)}...`);
-            io.to(sender.roomId).emit('chatMessage', {
+            // FIX: Event-Name von 'chatMessage' zu 'message' geändert
+            io.to(sender.roomId).emit('message', {
                 id: socket.id, // Sender-ID hinzufügen
                 username: sender.username,
                 color: sender.color,
@@ -125,18 +124,21 @@ io.on('connection', (socket) => {
     socket.on('typing', (data) => {
         const sender = connectedUsers.get(socket.id);
         if (sender) {
+             // Sende 'typing' Event an alle anderen im selben Raum
             socket.to(sender.roomId).emit('typing', { username: sender.username, isTyping: data.isTyping });
         }
     });
 
-    // --- WebRTC Signalisierung für Audio Mesh + Video Tracks ---
+    // WebRTC Signalisierung für Audio Mesh + Video Tracks
     // Dieses Signal leitet alle WebRTC-Nachrichten (offer, answer, candidate) zwischen zwei Peers weiter
     socket.on('webRTC-signal', (signalData) => {
         const sender = connectedUsers.get(socket.id);
         if (sender && signalData.to && signalData.type && signalData.payload) {
             const targetSocket = io.sockets.sockets.get(signalData.to);
 
+            // Stelle sicher, dass das Ziel existiert und im selben Raum ist
             if (targetSocket && connectedUsers.get(signalData.to)?.roomId === sender.roomId) {
+                console.log(`[WebRTC Signal] Leite Signal '${signalData.type}' von ${sender.id} an ${signalData.to} in Raum ${sender.roomId} weiter.`);
                 targetSocket.emit('webRTC-signal', {
                     from: sender.id,
                     type: signalData.type,
@@ -144,6 +146,7 @@ io.on('connection', (socket) => {
                 });
             } else {
                 console.warn(`[WebRTC Signal Warn] Signal '${signalData.type}' von ${sender.username} (${sender.id}) konnte nicht an Ziel ${signalData.to} weitergeleitet werden. Ziel existiert nicht, ist nicht verbunden oder nicht im selben Raum ${sender.roomId}.`);
+                // Optional: Dem Sender Bescheid geben, dass das Ziel ungültig ist
             }
         } else {
             console.warn(`[WebRTC Signal Warn] Ungültiges WebRTC-Signal von Socket ${socket.id} empfangen.`, signalData);
@@ -159,7 +162,8 @@ io.on('connection', (socket) => {
             sender.sharingStatus = data.sharing;
              connectedUsers.set(socket.id, sender);
 
-
+             // Informiere alle anderen Clients im Raum über die Statusänderung,
+             // indem die aktualisierte Benutzerliste gesendet wird.
              sendUserListUpdate(sender.roomId);
 
         } else {
@@ -176,15 +180,24 @@ io.on('connection', (socket) => {
             console.log(`[Disconnect] Benutzer '${disconnectingUser.username}' (${socket.id}) hat die Verbindung getrennt (Raum: ${formerRoomId}). Grund: ${reason}`);
             connectedUsers.delete(socket.id);
 
+            // Informiere die verbleibenden Clients über die Änderung
             sendUserListUpdate(formerRoomId);
 
         } else {
             console.log(`[Disconnect] Unbekannter Benutzer (${socket.id}) hat die Verbindung getrennt. Grund: ${reason}`);
         }
     });
+
+    // Server lauscht nicht explizit auf 'requestInitialState'.
+    // Der Client erhält seinen Initialzustand (eigene ID und Benutzerliste)
+    // durch das 'joinSuccess' Event und das nachfolgende 'user list' Broadcast.
+    // socket.on('requestInitialState', () => { ... }); // NICHT BENÖTIGT mit der aktuellen Logik
+
 });
 
 function getRandomColor(id) {
+     // Nutzt die Socket ID, die beim Auth gesetzt wurde, um eine konsistente Farbe zu erhalten.
+     // Fällt zurück auf übergebene ID (z.B. für alte Nachrichten oder wenn Auth umgangen wird).
      const colors = ['#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9700', '#ff5722', '#795548'];
      let hash = 0;
      const str = String(id);
