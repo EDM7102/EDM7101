@@ -6,6 +6,7 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 
+// CORS für lokale Tests und flexible Deployments
 const io = new Server(server, {
     cors: {
         origin: "*", // In Produktion auf spezifische Ursprünge beschränken!
@@ -18,12 +19,15 @@ const PORT = process.env.PORT || 3000;
 // Speichert die verbundenen Benutzer: { socketId: { username, color, id, roomId, sharingStatus: boolean } }
 const connectedUsers = new Map();
 
+// Statische Dateien ausliefern (HTML, CSS, Client-JS)
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Route für die Hauptseite
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Middleware für die initiale Verbindung und Authentifizierung
 io.use((socket, next) => {
     const username = socket.handshake.auth.username;
     const roomId = socket.handshake.auth.roomId;
@@ -54,6 +58,7 @@ io.use((socket, next) => {
     next();
 });
 
+// Socket.IO Event Handling
 io.on('connection', (socket) => {
     console.log(`[Connect] Benutzer '${socket.username}' (${socket.id}) verbunden mit Raum '${socket.roomId}'.`);
 
@@ -104,7 +109,7 @@ io.on('connection', (socket) => {
         if (sender && msgData.content) {
             console.log(`[Message] Nachricht in Raum ${sender.roomId} von ${sender.username}: ${msgData.content.substring(0, 50)}...`);
             io.to(sender.roomId).emit('chatMessage', {
-                id: socket.id,
+                id: socket.id, // Sender-ID hinzufügen
                 username: sender.username,
                 color: sender.color,
                 content: msgData.content,
@@ -151,9 +156,8 @@ io.on('connection', (socket) => {
         if (sender && typeof data.sharing === 'boolean') {
             console.log(`[ScreenShare] Benutzer '${sender.username}' (${sender.id}) in Raum ${sender.roomId}: Bildschirm teilen Status: ${data.sharing}`);
 
-            // Aktualisiere den Status in der Map
             sender.sharingStatus = data.sharing;
-             connectedUsers.set(socket.id, sender); // Stelle sicher, dass die Änderung gespeichert wird (Map.set ist idempotent bei gleichem Schlüssel)
+             connectedUsers.set(socket.id, sender); // Stelle sicher, dass die Änderung gespeichert wird
 
 
             // Informiere ALLE Benutzer im Raum (inklusive Sender) über den geänderten Status
@@ -175,7 +179,6 @@ io.on('connection', (socket) => {
             console.log(`[Disconnect] Benutzer '${disconnectingUser.username}' (${socket.id}) hat die Verbindung getrennt (Raum: ${formerRoomId}). Grund: ${reason}`);
             connectedUsers.delete(socket.id);
 
-            // Sende aktualisierte Benutzerliste an die verbleibenden Benutzer
             sendUserListUpdate(formerRoomId);
 
         } else {
@@ -185,7 +188,7 @@ io.on('connection', (socket) => {
 });
 
 function getRandomColor(id) {
-     const colors = ['#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9700', '#ff5722', '#795548']; // Eine Farbe hinzugefügt
+     const colors = ['#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9700', '#ff5722', '#795548'];
      let hash = 0;
      const str = String(id);
      for (let i = 0; i < str.length; i++) {
