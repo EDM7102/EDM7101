@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Initialisierung und UI-Helfer ---
     function initializeUI() {
-        console.log("[UI] initializeUI aufgerufen.");
+        console.log("[UI] initializeUI aufgerufen. state.connected:", state.connected);
         UI.disconnectBtn.classList.add('hidden');
         UI.shareScreenBtn.classList.add('hidden');
         UI.sendBtn.disabled = true;
@@ -109,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateUIAfterConnect() {
-        console.log("[UI] updateUIAfterConnect aufgerufen.");
+        console.log("[UI] updateUIAfterConnect aufgerufen. state.connected:", state.connected);
         UI.connectBtn.classList.add('hidden');
         UI.disconnectBtn.classList.remove('hidden');
         UI.shareScreenBtn.classList.remove('hidden');
@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateUIAfterDisconnect() {
-        console.log("[UI] updateUIAfterDisconnect aufgerufen.");
+        console.log("[UI] updateUIAfterDisconnect aufgerufen. state.connected:", state.connected);
         UI.connectBtn.classList.remove('hidden');
         UI.disconnectBtn.classList.add('hidden');
         UI.shareScreenBtn.classList.add('hidden');
@@ -409,6 +409,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- WebSocket Logic ---
     function connect() {
+        console.log("[Socket.IO] connect() aufgerufen. state.connected vor Verbindungsversuch:", state.connected);
         const serverUrl = window.location.origin; // Nimmt Host und Port der aktuellen Seite
         const roomId = state.roomId;
         let username = UI.usernameInput.value.trim();
@@ -432,26 +433,36 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("[Socket.IO] setupSocketListeners aufgerufen.");
 
         socket.on('connect', async () => {
-            console.log('[Socket.IO] Verbunden mit Server.');
-            // Die eigene Socket-ID und Userliste kommt per 'joinSuccess'
+            // state.connected wird hier noch NICHT auf true gesetzt.
+            // Wir warten auf 'joinSuccess' vom Server als Bestätigung.
+            console.log('[Socket.IO] "connect" event erhalten. Socket verbunden auf Transport:', socket.io.engine.transport.name, 'Socket ID:', socket.id);
+             // Die eigene Socket-ID und Userliste kommt per 'joinSuccess'
         });
 
-        socket.on('connect_error', (err) => {
-            console.error('[Socket.IO] Verbindungsfehler:', err.message, err.data);
+        socket.on('connecting', (transport) => {
+             console.log(`[Socket.IO] "connecting" event erhalten. Versuche über Transport: ${transport}`);
+        });
+         socket.on('connect_error', (err) => {
+            console.error('[Socket.IO] "connect_error" erhalten:', err.message, err.data);
+            state.connected = false; // Setze auf false bei Verbindungsfehler
+            console.log("[Socket.IO] state.connected nach connect_error:", state.connected);
             displayError(`Verbindungsfehler: ${err.message}. Server erreichbar?`);
             setConnectionStatus('disconnected', 'Verbindungsfehler');
             updateUIAfterDisconnect(); // Stellt sicher, dass UI zurückgesetzt wird
         });
 
         socket.on('disconnect', (reason) => {
-            console.log(`[Socket.IO] Verbindung getrennt: ${reason}`);
-            state.connected = false;
+            console.log(`[Socket.IO] "disconnect" event erhalten: ${reason}`);
+            state.connected = false; // Setze auf false bei Trennung
+            console.log("[Socket.IO] state.connected nach disconnect:", state.connected);
             displayError(`Verbindung getrennt: ${reason}`);
             updateUIAfterDisconnect();
         });
 
         socket.on('joinSuccess', async ({ users: currentUsers, id: myId }) => {
-            console.log(`[Socket.IO] Join erfolgreich. Deine ID: ${myId}, Benutzer im Raum:`, currentUsers);
+            console.log(`[Socket.IO] "joinSuccess" event erhalten. Dein Socket ID: ${myId}, Benutzer im Raum:`, currentUsers);
+            state.connected = true; // Jetzt wissen wir, dass wir erfolgreich verbunden und im Raum sind
+            console.log("[Socket.IO] state.connected nach joinSuccess:", state.connected);
             state.socketId = myId; // Eigene ID speichern
             state.username = currentUsers.find(u => u.id === myId)?.username || state.username; // Username vom Server übernehmen, falls geändert
             updateUserList(currentUsers);
@@ -474,18 +485,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
         socket.on('joinError', ({ message }) => {
-            console.error(`[Socket.IO] Join Fehler: ${message}`);
+            console.error(`[Socket.IO] "joinError" erhalten: ${message}`);
+            state.connected = false; // Bei Join-Fehler sind wir nicht verbunden
+            console.log("[Socket.IO] state.connected nach joinError:", state.connected);
             displayError(message);
 
             // Wenn der Fehler "Username already taken" ist, nicht sofort disconnecten,
             // damit der Nutzer den Namen ändern und es erneut versuchen kann.
-            if (!message.toLowerCase().includes("username already taken")) {
-                if (socket) socket.disconnect();
+            if (!message.toLowerCase().includes("benutzername in diesem raum bereits vergeben")) {
+                // if (socket) socket.disconnect(); // disconnect wird nicht benötigt, wenn der Server die Verbindung schließt
+                 updateUIAfterDisconnect(); // Stelle UI zurück, falls Socket geschlossen wird
             } else { // Bei "Username already taken"
-                UI.connectBtn.classList.remove('hidden');
-                UI.disconnectBtn.classList.add('hidden');
-                if (UI.usernameInput) UI.usernameInput.disabled = false;
-                setConnectionStatus('disconnected', 'Fehler beim Beitreten');
+                // Die Verbindung bleibt u.U. bestehen, aber der Join ist fehlgeschlagen.
+                // Setze den Status manuell zurück, um erneuten Versuch zu ermöglichen.
+                setConnectionStatus('disconnected', 'Benutzername bereits vergeben');
+                 if (UI.usernameInput) UI.usernameInput.disabled = false;
+                 UI.connectBtn.classList.remove('hidden');
+                 UI.disconnectBtn.classList.add('hidden');
+                 UI.shareScreenBtn.classList.add('hidden');
+                 UI.sendBtn.disabled = true;
+                 UI.messageInput.disabled = true;
+                 if (UI.fileUploadLabel) UI.fileUploadLabel.classList.add('hidden');
             }
         });
 
@@ -500,10 +520,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 closePeerConnection();
             }
             // Wenn keine P2P Verbindung besteht und andere User da sind (außer man selbst)
-            if (!state.currentPCPartnerId && currentUsersList.some(u => u.id !== state.socketId)) {
+            if (!state.currentPCPartnerId && state.connected && state.allUsersList.some(u => u.id !== state.socketId)) {
                 console.log("[WebRTC LOG] Neue User im Raum oder keine aktive Verbindung. Versuche P2P Verbindung.");
                 initiateP2PConnection();
-            } else if (currentUsersList.length === 1 && currentUsersList[0].id === state.socketId) {
+            } else if (state.connected && state.allUsersList.length === 1 && state.allUsersList[0].id === state.socketId) {
                  // Nur man selbst ist im Raum
                  if(state.currentPCPartnerId) closePeerConnection(); // Schließe ggf. alte Verbindung
                  updateVideoDisplay(UI.remoteVideo, UI.remoteScreenStatus, null, false); // Remote Video ausblenden
@@ -620,7 +640,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } // Ende setupSocketListeners
 
     function disconnect() {
-        console.log("[Socket.IO] Trenne Verbindung manuell.");
+        console.log("[Socket.IO] Trenne Verbindung manuell. state.connected vor Trennung:", state.connected);
         if (socket) {
             socket.disconnect(); // Dies löst das 'disconnect' Event aus, das updateUIAfterDisconnect aufruft
         } else {
@@ -631,12 +651,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Chat Logic ---
     function sendMessage() {
+        console.log("sendMessage() aufgerufen. state.connected:", state.connected, "socket existiert:", !!socket);
         const content = UI.messageInput.value.trim();
-        if (!content && !state.selectedFile) return;
+        if (!content && !state.selectedFile) {
+            console.log("sendMessage: Kein Inhalt oder Datei ausgewählt. Abbruch.");
+            return;
+        }
+        console.log("sendMessage: Inhalt oder Datei vorhanden. Prüfe Verbindung...");
+
         if (!socket || !state.connected) {
+            console.error("[Chat Send Error] Cannot send message. socket is null/undefined:", !socket, "state.connected is false:", !state.connected);
             displayError("Nicht verbunden. Nachricht kann nicht gesendet werden.");
             return;
         }
+        console.log("sendMessage: Verbindung aktiv. Sende Nachricht/Datei.");
 
         const messageBase = { content, timestamp: new Date().toISOString() };
 
@@ -654,6 +682,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     message.file.dataUrl = e.target.result;
+                    console.log(`sendMessage: Sende Bilddatei "${message.file.name}" (${formatFileSize(message.file.size)})`);
                     socket.emit('file', message);
                     resetFileInput();
                 };
@@ -664,11 +693,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 reader.readAsDataURL(state.selectedFile);
             } else { // Für andere Dateitypen (keine Vorschau im Chat, nur Metadaten)
+                console.log(`sendMessage: Sende Datei-Info für "${message.file.name}" (${formatFileSize(message.file.size)})`);
                 socket.emit('file', message);
                 resetFileInput();
             }
         } else { // Normale Textnachricht
             const message = { ...messageBase, type: 'text' };
+            console.log(`sendMessage: Sende Textnachricht: "${message.content.substring(0, 50)}..."`);
             socket.emit('message', message);
         }
 
@@ -765,18 +796,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     function sendTyping(isTyping = true) {
-        if (!socket || !state.connected) return;
+        if (!socket || !state.connected) {
+             console.log("sendTyping: Nicht verbunden, sende Tipp-Status nicht.");
+             return;
+        }
         // Sende Tipp-Status nur, wenn auch Nachrichten gesendet werden können
-        if(UI.messageInput.disabled) return;
+        if(UI.messageInput.disabled) {
+             console.log("sendTyping: Nachrichteneingabe deaktiviert, sende Tipp-Status nicht.");
+             return;
+        }
 
         clearTimeout(state.typingTimeout);
-        // Sende den aktuellen Tipp-Status nur, wenn er sich ändert oder Timer abgelaufen ist
+        // Sende Tipp-Status nur, wenn er sich ändert oder Timer abgelaufen ist
         // Um Server-Last zu reduzieren, könnte man hier client-seitig eine Rate-Limit einbauen.
         // Für jetzt senden wir einfach bei jeder Eingabe und dann nochmal false nach Pause.
 
         socket.emit('typing', { isTyping }); // Sendet den aktuellen Tipp-Status
+        console.log(`sendTyping: Emitting typing: ${isTyping}`);
         if (isTyping) {
             state.typingTimeout = setTimeout(() => {
+                console.log("sendTyping: Timer abgelaufen, sende typing: false");
                 socket.emit('typing', { isTyping: false }); // Sendet 'tippt nicht mehr' nach Timer-Ablauf
             }, CONFIG.TYPING_TIMER_LENGTH);
         }
@@ -906,27 +945,33 @@ document.addEventListener('DOMContentLoaded', () => {
     function stopLocalStream() {
         console.log("[WebRTC LOG] stopLocalStream: Stoppe alle lokalen Streams (Mikrofon und Screen).")
         if (state.localStream) {
+            console.log(`[WebRTC LOG] stopLocalStream: Stoppe Tracks von localStream (${state.localStream.id}).`);
             state.localStream.getTracks().forEach(track => {
                  console.log(`[WebRTC LOG] stopLocalStream: Stoppe lokalen Track ${track.id} (${track.kind}).`);
                  track.stop();
             });
             state.localStream = null;
             console.log("[WebRTC LOG] stopLocalStream: localStream ist nun null.");
+        } else {
+             console.log("[WebRTC LOG] stopLocalStream: localStream war bereits null.");
         }
         if (state.screenStream) {
+             console.log(`[WebRTC LOG] stopLocalStream: Stoppe Tracks von screenStream (${state.screenStream.id}).`);
              state.screenStream.getTracks().forEach(track => {
                   console.log(`[WebRTC LOG] stopLocalStream: Stoppe Screen Track ${track.id} (${track.kind}).`);
                   track.stop();
              });
             state.screenStream = null;
              console.log("[WebRTC LOG] stopLocalStream: screenStream ist nun null.");
+        } else {
+             console.log("[WebRTC LOG] stopLocalStream: screenStream war bereits null.");
         }
         // UI für localVideo wird von updateVideoDisplay mit null Stream zurückgesetzt
         updateVideoDisplay(UI.localVideo, UI.localScreenStatus, null, true);
     }
 
     async function createPeerConnection(peerId) {
-        console.log(`[WebRTC LOG] createPeerConnection aufgerufen für Peer: ${peerId}.`);
+        console.log(`[WebRTC LOG] createPeerConnection aufgerufen für Peer: ${peerId}. state.currentPCPartnerId vor Erstellung: ${state.currentPCPartnerId}`);
         if (state.peerConnection && state.currentPCPartnerId === peerId) {
             console.log(`[WebRTC LOG] createPeerConnection: PeerConnection mit ${peerId} existiert bereits und wird weiterverwendet.`);
             return state.peerConnection;
@@ -1104,7 +1149,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Füge Tracks vom lokalen Stream (Audio-only) oder ScreenStream hinzu, falls vorhanden, wenn PC gestartet wird.
         // Die Tracks sollten aktuell sein (Mikrofon oder Screen).
-        const streamToAdd = state.isSharingScreen && state.screenStream ? state.screenStream : state.localStream; // localStream ist jetzt Audio-only
+        const streamToAdd = state.isSharingScreen && state.screenStream ? state.screenStream : state.localStream; // localStream ist Audio-only
 
         if (streamToAdd) {
             console.log(`[WebRTC LOG] createPeerConnection: Füge Tracks vom Stream ${streamToAdd.id} (Typ: ${state.isSharingScreen ? 'Screen' : 'Mikrofon'}) zur neuen PeerConnection hinzu.`);
@@ -1121,24 +1166,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Hilfsfunktion, um Tracks zu einer PeerConnection hinzuzufügen
     function addTracksToPeerConnection(stream) {
-        if (stream && state.peerConnection) {
-            console.log(`[WebRTC LOG] addTracksToPeerConnection: Füge Tracks von Stream ${stream.id} zur PeerConnection hinzu.`);
-            stream.getTracks().forEach(track => {
-                // Füge den Track hinzu. addTrack erstellt automatisch einen neuen RTCRtpSender.
-                // Prüfe nicht explizit, ob ein Sender gleicher Art existiert, da addTrack dies intern verwaltet
-                // und onnegotiationneeded sich um die Neuverhandlung kümmert, wenn sich die SDP ändert.
-                 try {
-                     state.peerConnection.addTrack(track, stream);
-                     console.log(`[WebRTC LOG] addTracksToPeerConnection: Track ${track.kind} (${track.id}) erfolgreich hinzugefügt.`);
-                 } catch (e) {
-                      console.error(`[WebRTC LOG] addTracksToPeerConnection: Fehler beim Hinzufügen von Track ${track.id}:`, e);
-                 }
-            });
-        } else if (!stream) {
-            console.warn("[WebRTC LOG] addTracksToPeerConnection: Aufgerufen mit null Stream.");
-        } else if (!state.peerConnection) {
-             console.warn("[WebRTC LOG] addTracksToPeerConnection: Aufgerufen, aber PeerConnection ist null.");
+        if (!state.peerConnection) {
+             console.warn("[WebRTC LOG] addTracksToPeerConnection: PeerConnection ist null. Kann keine Tracks hinzufügen.");
+             return;
         }
+        if (!stream) {
+            console.warn("[WebRTC LOG] addTracksToPeerConnection: Aufgerufen mit null Stream.");
+            return;
+        }
+        console.log(`[WebRTC LOG] addTracksToPeerConnection: Füge Tracks von Stream ${stream.id} zur PeerConnection hinzu.`);
+        stream.getTracks().forEach(track => {
+            // Füge den Track hinzu. addTrack erstellt automatisch einen neuen RTCRtpSender.
+            // Prüfe nicht explizit, ob ein Sender gleicher Art existiert, da addTrack dies intern verwaltet
+            // und onnegotiationneeded sich um die Neuverhandlung kümmert, wenn sich die SDP ändert.
+             try {
+                 state.peerConnection.addTrack(track, stream);
+                 console.log(`[WebRTC LOG] addTracksToPeerConnection: Track ${track.kind} (${track.id}) erfolgreich hinzugefügt.`);
+             } catch (e) {
+                 console.error(`[WebRTC LOG] addTracksToPeerConnection: Fehler beim Hinzufügen von Track ${track.id}:`, e);
+             }
+        });
     }
 
 
@@ -1154,49 +1201,35 @@ document.addEventListener('DOMContentLoaded', () => {
         const senders = state.peerConnection.getSenders();
         let negotiationNeeded = false;
 
-        // Iteriere über alle Tracks im neuen Stream und finde/ersetze die entsprechenden Sender
-        const newTracks = newStream ? newStream.getTracks() : [];
-        const tracksToAdd = [...newTracks]; // Kopie, da wir hinzugefügte entfernen
-
+        // Iteriere über alle SENDER in der PeerConnection
         for (const sender of senders) {
             const trackKind = sender.track ? sender.track.kind : null;
-            if (!trackKind) continue;
-
-            // Finde einen passenden Track im neuen Stream (gleicher Kind)
-            const newTrackForSender = tracksToAdd.find(t => t.kind === trackKind);
+            // Finde den passenden Track im NEUEN Stream für diesen Sender-Kind
+            const newTrackForSender = newStream ? newStream.getTracks().find(t => t.kind === trackKind) : null;
 
             if (newTrackForSender) {
-                // Wenn der neue Track ein anderer ist als der aktuell gesendete, ersetze ihn
+                // Wenn der neue Track existiert und sich vom aktuell gesendeten Track unterscheidet, ersetze ihn
                 if (sender.track !== newTrackForSender) {
                     console.log(`[WebRTC LOG] replaceTracksInPeerConnection: Ersetze Track ${trackKind} (alt: ${sender.track?.id || 'N/A'}, neu: ${newTrackForSender.id})`);
                     try {
                         await sender.replaceTrack(newTrackForSender);
                         negotiationNeeded = true; // Track wurde ersetzt -> Neuverhandlung nötig
-                        // Entferne den verwendeten Track aus der tracksToAdd Liste
-                        const index = tracksToAdd.indexOf(newTrackForSender);
-                        if (index > -1) {
-                           tracksToAdd.splice(index, 1);
-                        }
                     } catch (e) {
                         console.error(`[WebRTC LOG] replaceTracksInPeerConnection: Fehler beim Ersetzen von Track ${trackKind}:`, e);
                          // Wenn replaceTrack fehlschlägt, könnte der Sender in einem ungültigen Zustand sein.
                          // Optional: Sender entfernen und neuen Track neu hinzufügen? Kompliziert.
                     }
                 } else {
-                     console.log(`[WebRTC LOG] replaceTracksInPeerConnection: Track ${trackKind} ist derselbe. Kein replace nötig.`);
-                      // Track ist derselbe, muss nicht neu hinzugefügt werden. Entferne ihn aus tracksToAdd.
-                      const index = tracksToAdd.indexOf(newTrackForSender);
-                        if (index > -1) {
-                           tracksToAdd.splice(index, 1);
-                        }
+                     console.log(`[WebRTC LOG] replaceTracksInPeerConnection: Track ${trackKind} ist derselbe (${sender.track?.id}). Kein replace nötig.`);
                 }
             } else {
-                // Wenn kein neuer Track für diesen Sender-Kind existiert (z.B. kein Video mehr), sende null
-                if (sender.track !== null) { // Nur ersetzen, wenn nicht schon null gesendet wird
+                // Wenn kein neuer Track für diesen Sender-Kind existiert (z.B. kein Video mehr von Kamera/Screen), sende null, falls aktuell ein Track gesendet wird
+                if (sender.track !== null) {
                     console.log(`[WebRTC LOG] replaceTracksInPeerConnection: Sende null für Track ${trackKind} (alt: ${sender.track?.id || 'N/A'}), da kein neuer Track verfügbar.`);
+                     // Ersetze den Track durch null, um das Senden dieses Tracks zu stoppen.
                     try {
                         await sender.replaceTrack(null);
-                        negotiationNeeded = true; // Null gesendet -> Neuverhandlung nötig
+                         negotiationNeeded = true; // Null gesendet -> Neuverhandlung nötig
                     } catch (e) {
                          console.error(`[WebRTC LOG] replaceTracksInPeerConnection: Fehler beim Ersetzen von Track ${trackKind} durch null:`, e);
                     }
@@ -1206,17 +1239,26 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Füge alle verbleibenden Tracks in tracksToAdd hinzu (die, für die es keinen Sender gab)
-        for (const track of tracksToAdd) {
-             console.log(`[WebRTC LOG] replaceTracksInPeerConnection: Füge neuen Track ${track.kind} (${track.id}) hinzu.`);
-             try {
-                 // Füge den Track hinzu. Dies erstellt einen neuen Sender.
-                 state.peerConnection.addTrack(track, newStream);
-                 negotiationNeeded = true; // Neuer Track hinzugefügt -> Neuverhandlung nötig
-             } catch (e) {
-                 console.error(`[WebRTC LOG] replaceTracksInPeerConnection: Fehler beim Hinzufügen von neuem Track ${track.id}:`, e);
-             }
-        }
+         // Füge alle Tracks aus dem newStream hinzu, für die es noch KEINEN Sender gab.
+         // Dies ist wichtig, wenn ein neuer Track-Typ hinzugefügt wird (z.B. Video, wenn vorher nur Audio).
+         if (newStream) {
+             const existingSenderKinds = senders.map(s => s.track?.kind).filter(kind => kind);
+             newStream.getTracks().forEach(track => {
+                 if (!existingSenderKinds.includes(track.kind)) {
+                     console.log(`[WebRTC LOG] replaceTracksInPeerConnection: Füge neuen Track ${track.kind} (${track.id}) hinzu (Kein existierender Sender dieses Typs).`);
+                      try {
+                         state.peerConnection.addTrack(track, newStream);
+                         negotiationNeeded = true; // Neuer Track hinzugefügt -> Neuverhandlung nötig
+                      } catch (e) {
+                         console.error(`[WebRTC LOG] replaceTracksInPeerConnection: Fehler beim Hinzufügen von neuem Track ${track.id}:`, e);
+                      }
+                 } else {
+                      // Dieser Track-Kind existiert bereits als Sender. Er wurde oben entweder ersetzt oder war derselbe.
+                      console.log(`[WebRTC LOG] replaceTracksInPeerConnection: Track ${track.kind} (${track.id}) ist bereits vorhanden oder wurde ersetzt. Wird nicht erneut hinzugefügt.`);
+                 }
+             });
+         }
+
 
         if (negotiationNeeded) {
             console.log("[WebRTC LOG] replaceTracksInPeerConnection: Tracks wurden geändert. Neuverhandlung wird angestoßen.");
@@ -1224,7 +1266,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // die Sender-Liste ändert oder replaceTrack(null) aufruft.
             // Für Robustheit können wir hier explizit ein Offer versuchen, aber die onnegotiationneeded Logik
             // sollte die primäre Methode sein, um Glare zu vermeiden.
-            // await createAndSendOffer(); // Optional: Explizit Offer versuchen
+            // createAndSendOffer() wird am Ende von onnegotiationneeded aufgerufen, wenn nötig.
+            // Manchmal kann es aber sinnvoll sein, ein Offer hier direkt anzustoßen,
+            // wenn man sicher ist, dass man der Initiator ist oder eine sofortige Neuverhandlung erzwingen will.
+            // Lasse es vorerst weg und verlasse mich auf onnegotiationneeded.
         } else {
             console.log("[WebRTC LOG] replaceTracksInPeerConnection: Keine effektive Änderung der Tracks. Keine Neuverhandlung angestoßen.");
         }
@@ -1248,10 +1293,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Remote Stream Tracks stoppen und Stream nullen
         if(state.remoteStream){
-            console.log(`[WebRTC LOG] closePeerConnection: Stoppe Tracks des remoteStream ${state.remoteStream.id}.`);
+            console.log(`[WebRTC LOG] closePeerConnection: Stoppe Tracks des remoteStream (${state.remoteStream.id}).`);
             state.remoteStream.getTracks().forEach(track => track.stop());
             state.remoteStream = null;
              console.log("[WebRTC LOG] closePeerConnection: remoteStream ist nun null.");
+        } else {
+             console.log("[WebRTC LOG] closePeerConnection: remoteStream war bereits null.");
         }
         // Remote Video UI zurücksetzen
         updateVideoDisplay(UI.remoteVideo, UI.remoteScreenStatus, null, false);
@@ -1265,12 +1312,15 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("[WebRTC LOG] initiateP2PConnection: Bedingungen nicht erfüllt (nicht verbunden, kein Socket oder keine eigene ID).");
             return;
         }
-        // Nur wenn noch keine Verbindung zu einem P2P Partner besteht oder der aktuelle Partner nicht mehr online ist
-        if (state.peerConnection && state.currentPCPartnerId && state.allUsersList.some(u => u.id === state.currentPCPartnerId)) {
-             console.log(`[WebRTC LOG] initiateP2PConnection: Bestehende Verbindung zu ${state.currentPCPartnerId}. Keine Aktion.`);
+        // Nur wenn noch keine Verbindung zu einem P2P Partner besteht oder der aktuelle Partner nicht mehr online ist.
+        // Prüfe, ob der aktuelle Partner noch in der Benutzerliste ist.
+        const currentPartnerOnline = state.currentPCPartnerId && state.allUsersList.some(u => u.id === state.currentPCPartnerId);
+
+        if (state.peerConnection && currentPartnerOnline) {
+             console.log(`[WebRTC LOG] initiateP2PConnection: Bestehende Verbindung zu ${state.currentPCPartnerId} ist online. Keine Aktion.`);
              // Optional: Hier könnte man prüfen, ob die bestehende Verbindung noch gesund ist.
              return;
-        } else if (state.peerConnection && state.currentPCPartnerId) { // Partner weg, aber PC noch da
+        } else if (state.peerConnection && !currentPartnerOnline) { // Partner weg, aber PC noch da
             console.log("[WebRTC LOG] initiateP2PConnection: Aktueller Partner nicht mehr online. Schließe alte PeerConnection.");
             closePeerConnection(); // Alte Verbindung aufräumen
         }
@@ -1307,20 +1357,28 @@ document.addEventListener('DOMContentLoaded', () => {
              if(streamToAdd) {
                  console.log(`[WebRTC LOG] initiateP2PConnection: Füge Tracks von lokalem Stream (${streamToAdd.id}, Typ: ${state.isSharingScreen ? 'Screen' : 'Mikrofon'}) zur PC hinzu.`);
                   addTracksToPeerConnection(streamToAdd);
+                  // Wenn wir Initiator sind UND Tracks hinzugefügt haben, erstellen wir direkt ein Offer.
+                  // Ansonsten wartet der Empfänger auf das Offer.
+                 if (shouldInitiateOffer) {
+                      console.log(`[WebRTC LOG] initiateP2PConnection: Bin Initiator UND Tracks hinzugefügt. Erstelle und sende Offer.`);
+                     await createAndSendOffer(); // sendet Offer, wenn SignallingState stable
+                 } else {
+                      console.log(`[WebRTC LOG] initiateP2PConnection: Bin Empfänger ODER keine Tracks zum Hinzufügen. Warte auf Offer.`);
+                 }
+
              } else {
                   console.warn("[WebRTC LOG] initiateP2PConnection: Kein lokaler Stream vorhanden, kann keine Tracks zur PC hinzufügen.");
-                  // Dies sollte eigentlich nicht passieren, wenn setupLocalMedia erfolgreich war.
+                  // Auch wenn keine Tracks hinzugefügt wurden, muss der Initiator das Offer senden,
+                  // damit der SDP-Austausch gestartet wird (für zukünftige Track-Additions).
+                  if (shouldInitiateOffer) {
+                       console.log(`[WebRTC LOG] initiateP2PConnection: Kein lokaler Stream, aber bin Initiator. Erstelle und sende Offer.`);
+                      await createAndSendOffer(); // sendet Offer, auch wenn keine Tracks drin sind
+                   } else {
+                        console.log(`[WebRTC LOG] initiateP2PConnection: Kein lokaler Stream und bin Empfänger. Warte auf Offer.`);
+                   }
              }
 
 
-             if (shouldInitiateOffer) {
-                 console.log(`[WebRTC LOG] initiateP2PConnection: Bin Initiator, erstelle und sende Offer an ${targetUser.username}.`);
-                 // Starte den SDP-Austausch durch Erstellen eines Offers
-                 await createAndSendOffer(); // sendet Offer, wenn SignallingState stable
-             } else {
-                 console.log(`[WebRTC LOG] initiateP2PConnection: Bin Empfänger, warte auf Offer von ${targetUser.username}.`);
-                 // Warte auf ein Offer vom anderen Peer. Die ontrack-Events und Signaling-Handler werden dann die Verbindung aufbauen.
-             }
          }).catch(err => {
               console.error("[WebRTC LOG] initiateP2PConnection: Fehler beim Erstellen der PeerConnection:", err);
               displayError("Fehler beim Aufbau der P2P-Verbindung.");
@@ -1330,21 +1388,78 @@ document.addEventListener('DOMContentLoaded', () => {
 
     }
 
+     async function createAndSendOffer() {
+         if (!state.peerConnection || !state.currentPCPartnerId) {
+             console.warn("[WebRTC LOG] createAndSendOffer: Bedingungen nicht erfüllt (keine PC oder kein Partner). Offer wird nicht erstellt.");
+             return;
+         }
+         // Strenge Prüfung des Signalisierungsstatus, um "glare" und Race Conditions zu minimieren.
+         // Nur anbieten, wenn der Zustand 'stable' ist (oder in bestimmten Übergangszuständen, je nach Peer-Rolle und Ereignis).
+         // Hier verlassen wir uns stark auf onnegotiationneeded für den automatischen Aufruf im 'stable' Zustand.
+         // Wenn diese Funktion explizit aufgerufen wird (z.B. nach addTrack/replaceTrack),
+         // prüfen wir den Zustand, um Glare zu vermeiden (Polite/Impolite Logic).
+         // Da unsere initiateP2PConnection und replaceTracksInPeerConnection jetzt explizit
+         // createAndSendOffer aufrufen können, fügen wir eine Polite Peer Glare Handling Prüfung hinzu.
+
+         // Verbesserte Glare Handling Prüfung (nur Polite Peer sendet Offer von stable state)
+         const isPolite = state.socketId < state.currentPCPartnerId; // Annahme der Polite Peer Logik
+         const canCreateOffer = state.peerConnection.signalingState === 'stable' ||
+                                (state.peerConnection.signalingState === 'have-local-offer' && !isPolite); // Impolite kann Offer bei have-local-offer neu senden
+
+         if (!canCreateOffer) {
+              console.warn(`[WebRTC LOG] createAndSendOffer: Überspringe Offer-Erstellung. Aktueller Signalisierungsstatus: '${state.peerConnection.signalingState}'. Bin Polite? ${isPolite}. Partner ID: ${state.currentPCPartnerId}.`);
+              return;
+         }
+
+
+         try {
+             console.log(`[WebRTC LOG] createAndSendOffer: Erstelle Offer für ${state.currentPCPartnerId}. Aktueller Signalling State: ${state.peerConnection.signalingState}`);
+             const offer = await state.peerConnection.createOffer();
+
+             // Überprüfe, ob sich das Offer wirklich geändert hat, bevor setLocalDescription erneut aufgerufen wird (vermeidet unnötige Events)
+             if (!state.peerConnection.localDescription || state.peerConnection.localDescription.sdp !== offer.sdp) {
+                 console.log(`[WebRTC LOG] createAndSendOffer: Setze LocalDescription (Offer) für ${state.currentPCPartnerId}. Offer Typ: ${offer.type}`);
+                 await state.peerConnection.setLocalDescription(offer); // Das aktualisiert localDescription
+                 console.log(`[WebRTC LOG] createAndSendOffer: LocalDescription gesetzt. Neuer Signalling State: ${state.peerConnection.signalingState}`);
+             } else {
+                 console.log(`[WebRTC LOG] createAndSendOffer: Neues Offer ist identisch mit dem bestehenden LocalDescription. Kein setLocalDescription nötig.`);
+             }
+
+             // Sende das (ggf. gerade gesetzte) localDescription
+             if (state.peerConnection.localDescription) {
+                 console.log(`[WebRTC LOG] createAndSendOffer: Sende Offer (Typ: ${state.peerConnection.localDescription.type}) an ${state.currentPCPartnerId}.`);
+                 socket.emit('webRTC-offer', { to: state.currentPCPartnerId, offer: state.peerConnection.localDescription });
+             } else {
+                  console.error("[WebRTC LOG] createAndSendOffer: localDescription ist null nach setLocalDescription. Offer kann nicht gesendet werden.");
+             }
+
+         } catch (err) {
+             console.error('[WebRTC LOG] createAndSendOffer: Fehler beim Erstellen/Senden des Offers:', err);
+             displayError("Fehler bei der Video-Verhandlung (Offer).");
+             // Bei Fehler ggf. PeerConnection schließen oder Neuversuch planen?
+             // closePeerConnection(); // Vorsicht mit automatischem Schließen bei jedem Fehler
+         }
+     }
+
 
     async function toggleScreenSharing() {
-        if (!state.connected || !UI.shareScreenBtn) return;
+        if (!state.connected || !UI.shareScreenBtn) {
+             console.warn("[WebRTC LOG] toggleScreenSharing: Nicht verbunden oder Button nicht gefunden.");
+             return;
+        }
         UI.shareScreenBtn.disabled = true; // Button während des Vorgangs deaktivieren
         console.log(`[WebRTC LOG] toggleScreenSharing aufgerufen. Aktueller Zustand: ${state.isSharingScreen ? 'Sharing aktiv' : 'Sharing inaktiv'}.`);
 
         if (state.isSharingScreen) { // Screensharing beenden
             console.log("[WebRTC LOG] toggleScreenSharing: Beende Screensharing.");
             if (state.screenStream) {
+                console.log(`[WebRTC LOG] toggleScreenSharing: Stoppe Tracks von screenStream (${state.screenStream.id}).`);
                 state.screenStream.getTracks().forEach(track => {
                     console.log(`[WebRTC LOG] toggleScreenSharing: Stoppe Screen Track ${track.id} (${track.kind}).`);
                     track.stop();
                 });
                 state.screenStream = null;
-                console.log("[WebRTC LOG] toggleScreenSharing: ScreenStream ist nun null.");
+                console.log("[WebRTC LOG] toggleScreenSharing: screenStream ist nun null.");
             }
             state.isSharingScreen = false;
             UI.shareScreenBtn.textContent = 'Bildschirm teilen';
