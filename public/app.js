@@ -888,16 +888,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Init ---
-    // Initialisiert die Anwendung beim Laden der Seite
-    function initializeApp() {
-        console.log("[App] initializeApp aufgerufen.");
-        initializeUI(); // UI initialisieren und Status setzen
-        // populateMicList() wird in updateUIAfterConnect aufgerufen
-    }
-
-
-    // --- App Start ---
     // App initialisieren, wenn das DOM bereit ist
-    initializeApp();
+    console.log("[App] DOMContentLoaded. App wird initialisiert.");
+    initializeUI(); // UI initialisieren und Status setzen
+    // populateMicList() wird in updateUIAfterConnect aufgerufen
 
 }); // Ende DOMContentLoaded
