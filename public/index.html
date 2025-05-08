@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EDMBook Sprach-Chat</title>
+    <title>EDMBook Chat & Teilen</title>
     <link rel="stylesheet" href="style.css">
     </head>
 <body>
     <div class="app-container">
         <header class="app-header">
-            <h1>EDMBook Sprach-Chat</h1>
+            <h1>EDMBook Chat & Teilen</h1>
             <div id="statusIndicator" class="status-indicator disconnected">Getrennt</div>
         </header>
 
@@ -26,6 +26,9 @@
                         </select>
 
                     <button id="localMuteBtn" class="hidden mute-btn">Mikro stumm schalten</button>
+
+                    <button id="shareScreenBtn" class="hidden">🖥 Bildschirm teilen</button>
+
 
                     <button id="connectBtn">Verbinden</button>
                     <button id="disconnectBtn" class="hidden danger-btn">Trennen</button>
@@ -44,6 +47,16 @@
 
             <main class="chat-area">
                 <div id="errorMessage" class="error-message hidden"></div>
+
+                <div id="remoteScreenContainer" class="remote-screen-container hidden">
+                     <div class="screen-header">
+                          <h3>Geteilter Bildschirm von <span id="remoteScreenSharerName"></span></h3>
+                          </div>
+                     <div class="screen-video-box">
+                          <video id="remoteScreenVideo" autoplay playsinline></video>
+                          </div>
+                     <button class="fullscreen-btn">Vollbild</button> </div>
+
 
                 <div id="messagesContainer" class="messages-container">
                     </div>
