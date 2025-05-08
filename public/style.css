@@ -11,7 +11,7 @@
     --text-on-accent-bg: #ffffff;
 
     --border-color: #3d3d3d;
-    --divider-color: #444; /* Etwas hellere Linie für Trenner */
+    --divider-color: #444;
 
     --accent-highlight-color: #c0c0c0;
     --link-color: #82aaff;
@@ -34,15 +34,14 @@
     --success-text-color: var(--text-on-accent-bg);
 
     /* Farben für Audio-Steuerung */
-    --audio-active-color: #4caf50; /* Grün */
-    --audio-muted-color: #f44336; /* Rot */
-    --audio-button-bg: var(--button-bg); /* Standard Button Farbe */
+    --audio-active-color: #4caf50;
+    --audio-muted-color: #f44336;
+    --audio-button-bg: var(--button-bg);
     --audio-button-hover-bg: var(--button-hover-bg);
     --audio-button-muted-bg: var(--audio-muted-color);
-    --audio-button-muted-hover-bg: #c62828; /* Dunkleres Rot */
+    --audio-button-muted-hover-bg: #c62828;
 }
 
-/* Grundlegende Body-Stile beibehalten */
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     margin: 0;
@@ -52,48 +51,45 @@ body {
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    font-size: 15px; /* Etwas verkleinert für mehr Inhalt */
-    line-height: 1.6; /* Erhöht für bessere Lesbarkeit */
+    font-size: 15px;
+    line-height: 1.6;
 }
 
-/* App Container beibehalten */
 .app-container {
-    width: 98%; /* Etwas breiter für größere Bildschirme */
-    max-width: 1600px; /* Maximale Breite erhöht */
-    height: 95vh; /* Etwas höher für größere Bildschirme */
-    max-height: 1000px; /* Maximale Höhe erhöht */
+    width: 98%;
+    max-width: 1600px;
+    height: 95vh;
+    max-height: 1000px;
     background-color: var(--secondary-bg);
-    border-radius: 12px; /* Rundere Ecken */
-    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4); /* Stärkerer Schatten */
+    border-radius: 12px;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid var(--border-color); /* Leichter Rahmen */
+    border: 1px solid var(--border-color);
 }
 
-/* App Header beibehalten */
 .app-header {
     background-color: var(--secondary-bg);
-    padding: 12px 25px; /* Padding erhöht */
+    padding: 12px 25px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid var(--divider-color); /* Hellere Trennlinie */
-    flex-shrink: 0; /* Verhindert Schrumpfen im Flex-Layout */
+    border-bottom: 1px solid var(--divider-color);
+    flex-shrink: 0;
 }
 
 .app-header h1 {
     margin: 0;
-    font-size: 1.6em; /* Größe leicht erhöht */
+    font-size: 1.6em;
     color: var(--accent-highlight-color);
-    font-weight: 600; /* Etwas fetter */
+    font-weight: 600;
 }
 
-/* Status Indicator beibehalten */
 .status-indicator {
-    padding: 6px 12px; /* Padding erhöht */
-    border-radius: 5px; /* Rundere Ecken */
-    font-size: 0.95em; /* Größe leicht erhöht */
+    padding: 6px 12px;
+    border-radius: 5px;
+    font-size: 0.95em;
     font-weight: bold;
     flex-shrink: 0;
 }
@@ -101,84 +97,82 @@ body {
 .status-indicator.disconnected { background-color: var(--error-bg); color: var(--error-text-color); }
 .status-indicator.connecting { background-color: #f39c12; color: white; }
 
-/* Main Content Layout beibehalten */
 .main-content {
     display: flex;
     flex-grow: 1;
     overflow: hidden;
 }
 
-/* Sidebar Styling */
 .sidebar {
-    width: 300px; /* Breite leicht erhöht */
-    min-width: 250px; /* Minimale Breite */
+    width: 300px;
+    min-width: 250px;
     background-color: var(--secondary-bg);
-    padding: 20px; /* Padding erhöht */
-    border-right: 1px solid var(--divider-color); /* Hellere Trennlinie */
+    padding: 20px;
+    border-right: 1px solid var(--divider-color);
     display: flex;
     flex-direction: column;
-    gap: 25px; /* Abstand zwischen Sektionen erhöht */
+    gap: 25px;
     overflow-y: auto;
-    flex-shrink: 0; /* Verhindert Schrumpfen im Flex-Layout */
+    flex-shrink: 0;
 }
 
 .connection-controls h2,
 .user-list-container h2,
-.audio-controls-section h3 { /* Überschriften in der Sidebar */
-    font-size: 1.2em; /* Größe erhöht */
+.audio-controls-section h3 {
+    font-size: 1.2em;
     margin-top: 0;
-    margin-bottom: 12px; /* Abstand erhöht */
+    margin-bottom: 12px;
     color: var(--accent-highlight-color);
-    border-bottom: 1px solid var(--divider-color); /* Hellere Trennlinie */
-    padding-bottom: 8px; /* Padding erhöht */
+    border-bottom: 1px solid var(--divider-color);
+    padding-bottom: 8px;
 }
 
 .connection-controls label {
-    display: block; /* Label in eigene Zeile */
-    margin-bottom: 6px; /* Abstand unter Label */
+    display: block;
+    margin-bottom: 6px;
     font-size: 0.95em;
     color: var(--text-secondary-color);
 }
 
 .connection-controls input[type="text"],
 .connection-controls select,
-.connection-controls button { /* Alle Formular-Elemente & Buttons */
-    display: block; /* Volle Breite */
+.connection-controls button {
+    display: block;
     width: 100%;
-    box-sizing: border-box; /* Padding und Border in Breite einbeziehen */
-    padding: 12px; /* Padding erhöht */
+    box-sizing: border-box;
+    padding: 12px;
     margin-bottom: 10px;
     border: 1px solid var(--border-color);
-    border-radius: 6px; /* Rundere Ecken */
+    border-radius: 6px;
     background-color: var(--content-element-bg);
     color: var(--text-color);
     font-size: 1em;
 }
 .connection-controls input[type="text"]::placeholder {
-    color: var(--text-muted-color); /* Dunklerer Platzhalter */
+    color: var(--text-muted-color);
 }
 .connection-controls select {
     appearance: none;
-    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23808080' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e"); /* Pfeilfarbe angepasst */
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23808080' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
     background-repeat: no-repeat;
-    background-position: right 12px center; /* Position angepasst */
-    background-size: 0.9em; /* Größe angepasst */
-    padding-right: 2.8em; /* Platz für Pfeil */
+    background-position: right 12px center;
+    background-size: 0.9em;
+    padding-right: 2.8em;
     cursor: pointer;
 }
 
 
 /* Audio Controls Sektion Styling */
 .audio-controls-section {
-     margin-top: 0; /* Wird in der Gap des Sidebars geregelt */
+     margin-top: 0;
      padding-top: 0;
-     border-top: none; /* Wird in der Gap des Sidebars geregelt */
+     border-top: none;
      display: flex;
      flex-direction: column;
-     gap: 12px; /* Abstand zwischen Audio-Items */
+     gap: 12px;
 }
 .audio-controls-section h3 {
-     margin-bottom: 12px; /* Abstand unter Überschrift */
+     margin-bottom: 12px;
      border-bottom: 1px solid var(--divider-color);
      padding-bottom: 8px;
 }
@@ -186,24 +180,24 @@ body {
 .remote-audio-item {
     display: flex;
     align-items: center;
-    gap: 10px; /* Abstand erhöht */
+    gap: 10px;
     font-size: 0.9em;
     color: var(--text-secondary-color);
-    flex-wrap: nowrap; /* Kein Umbruch bei kleinen Bildschirmen für diese Item-Reihe */
+    flex-wrap: nowrap;
 }
 .remote-audio-item span {
     flex-grow: 1;
-    white-space: nowrap; /* Verhindert Zeilenumbruch im Namen */
-    overflow: hidden; /* Überlaufenden Text verstecken */
-    text-overflow: ellipsis; /* Punkte für abgeschnittenen Text */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .remote-audio-item button.mute-btn {
-    padding: 6px 10px; /* Padding angepasst */
-    font-size: 0.85em; /* Größe angepasst */
+    padding: 6px 10px;
+    font-size: 0.85em;
     width: auto;
     margin-bottom: 0;
-    border-radius: 4px; /* Kleinere Ecken */
+    border-radius: 4px;
     background-color: var(--audio-button-bg);
     color: var(--button-text-color);
     transition: background-color 0.2s ease;
@@ -221,11 +215,11 @@ body {
 
 /* Lokaler Mute Button Styling (wie Remote, aber volle Breite) */
 #localMuteBtn.mute-btn {
-    display: block; /* Volle Breite */
+    display: block;
     width: 100%;
     box-sizing: border-box;
-    padding: 12px; /* Größeres Padding wie andere Hauptbuttons */
-    font-size: 1em; /* Größere Schrift */
+    padding: 12px;
+    font-size: 1em;
     margin-bottom: 10px;
     border-radius: 6px;
     background-color: var(--audio-button-bg);
@@ -246,29 +240,27 @@ body {
 
 /* Allgemeine Button-Stile (angepasst) */
 .connection-controls button,
-.message-input-area button,
-.file-upload-label {
-    padding: 12px; /* Padding erhöht */
+.message-input-area button { /* file-upload-label entfernt */
+    padding: 12px;
     border: none;
-    border-radius: 6px; /* Rundere Ecken */
+    border-radius: 6px;
     background-color: var(--button-bg);
     color: var(--button-text-color);
     cursor: pointer;
     font-size: 1em;
-    margin-bottom: 10px; /* Abstand erhöht */
+    margin-bottom: 10px;
     transition: background-color 0.2s ease;
     text-align: center;
-    font-weight: 500; /* Mittlere Schriftstärke */
+    font-weight: 500;
 }
-.connection-controls button:last-child, /* Letzter Button in der Sektion */
+.connection-controls button:last-child,
 .audio-controls-section button:last-child {
-     margin-bottom: 0; /* Kein Abstand unter dem letzten Button */
+     margin-bottom: 0;
 }
 
 
 .connection-controls button:hover,
-.message-input-area button:hover,
-.file-upload-label:hover {
+.message-input-area button:hover { /* file-upload-label entfernt */
     background-color: var(--button-hover-bg);
 }
 
@@ -292,14 +284,13 @@ body {
 
 .connection-controls button:disabled,
 .connection-controls select:disabled,
-.message-input-area button:disabled,
-.file-upload-label[disabled],
-#localMuteBtn.mute-btn:disabled, /* Disabled Stil für lokalen Mute Button */
-.remote-audio-item button.mute-btn:disabled { /* Disabled Stil für Remote Mute Button */
+.message-input-area button:disabled, /* file-upload-label entfernt */
+#localMuteBtn.mute-btn:disabled,
+.remote-audio-item button.mute-btn:disabled {
     background-color: #383838;
     color: var(--text-muted-color);
     cursor: not-allowed;
-    opacity: 0.6; /* Etwas weniger transparent */
+    opacity: 0.6;
 }
 
 /* Benutzerliste Styling */
@@ -315,24 +306,24 @@ body {
     margin: 0;
 }
 #userList li {
-    padding: 8px 0; /* Padding erhöht */
-    font-size: 1em; /* Größe leicht erhöht */
+    padding: 8px 0;
+    font-size: 1em;
     display: flex;
     align-items: center;
     word-break: break-all;
     color: var(--text-secondary-color);
 }
 #userList li .user-dot {
-    width: 12px; /* Größe erhöht */
-    height: 12px; /* Größe erhöht */
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
-    margin-right: 10px; /* Abstand erhöht */
+    margin-right: 10px;
     background-color: var(--success-bg);
     flex-shrink: 0;
 }
 #userList li strong {
     color: var(--text-color);
-    font-weight: 600; /* Etwas fetter */
+    font-weight: 600;
 }
 
 
@@ -347,143 +338,109 @@ body {
 
 .messages-container {
     flex-grow: 1;
-    padding: 20px; /* Padding erhöht */
+    padding: 20px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 15px; /* Abstand zwischen Nachrichten erhöht */
-    scrollbar-width: thin; /* Dünnere Scrollbar */
-    scrollbar-color: var(--text-muted-color) var(--content-area-bg); /* Scrollbar Farbe */
+    gap: 15px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--text-muted-color) var(--content-area-bg);
 }
 /* Webkit Scrollbar (Chrome, Safari) */
 .messages-container::-webkit-scrollbar {
-  width: 8px; /* Breite der Scrollbar */
+  width: 8px;
 }
 .messages-container::-webkit-scrollbar-track {
-  background: var(--content-area-bg); /* Hintergrund der Scrollbar */
+  background: var(--content-area-bg);
 }
 .messages-container::-webkit-scrollbar-thumb {
-  background-color: var(--text-muted-color); /* Farbe des Scrollbalkens */
-  border-radius: 4px; /* Rundung des Scrollbalkens */
-  border: 2px solid var(--content-area-bg); /* Abstand zum Rand */
+  background-color: var(--text-muted-color);
+  border-radius: 4px;
+  border: 2px solid var(--content-area-bg);
 }
 
 
 .message {
-    padding: 12px 16px; /* Padding erhöht */
-    border-radius: 18px; /* Stärker gerundet */
-    max-width: 80%; /* Max Breite leicht erhöht */
+    padding: 12px 16px;
+    border-radius: 18px;
+    max-width: 80%;
     word-wrap: break-word;
     position: relative;
-    filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2)); /* Leichter Schatten für Tiefe */
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2));
 }
 .message .name {
     font-weight: bold;
     display: block;
-    font-size: 0.9em; /* Größe leicht erhöht */
-    margin-bottom: 4px; /* Abstand erhöht */
+    font-size: 0.9em;
+    margin-bottom: 4px;
     color: var(--accent-highlight-color);
 }
 .message.me {
     background-color: var(--message-bg-me);
     color: var(--message-text-me);
     align-self: flex-end;
-    border-bottom-right-radius: 6px; /* Kleinere Rundung am unteren Ende */
-    margin-right: 8px; /* Abstand zum rechten Rand */
+    border-bottom-right-radius: 6px;
+    margin-right: 8px;
 }
 .message:not(.me) {
     background-color: var(--message-bg-other);
     color: var(--message-text-other);
     align-self: flex-start;
-    border-bottom-left-radius: 6px; /* Kleinere Rundung am unteren Ende */
-    margin-left: 8px; /* Abstand zum linken Rand */
+    border-bottom-left-radius: 6px;
+    margin-left: 8px;
 }
 
 .message .timestamp {
-    font-size: 0.75em; /* Größe leicht erhöht */
+    font-size: 0.75em;
     color: var(--text-muted-color);
     position: absolute;
-    bottom: 6px; /* Position angepasst */
-    right: 12px; /* Position angepasst */
+    bottom: 6px;
+    right: 12px;
     background-color: rgba(var(--message-bg-me), 0.8); /* Hintergrund, damit Text lesbar bleibt */
     padding: 0 4px;
     border-radius: 3px;
-    pointer-events: none; /* Verhindert Interaktion */
+    pointer-events: none;
 }
 .message:not(.me) .timestamp {
     right: auto;
-    left: 12px; /* Position angepasst */
+    left: 12px;
     background-color: rgba(var(--message-bg-other), 0.8);
 }
 
+/* .file-attachment stiles entfernt */
 
-.file-attachment img {
-    max-width: 250px; /* Max Breite für Bilder erhöht */
-    max-height: 250px; /* Max Höhe für Bilder erhöht */
-    border-radius: 8px; /* Stärker gerundet */
-    cursor: pointer;
-    display: block;
-    margin-bottom: 8px; /* Abstand erhöht */
-    border: 1px solid var(--border-color);
-}
-.file-attachment span.file-icon {
-    font-size: 2.5em; /* Größe erhöht */
-    margin-right: 8px; /* Abstand erhöht */
-    color: var(--accent-highlight-color); /* Akzentfarbe für Icon */
-    display: inline-block;
-    vertical-align: middle;
-}
-.file-attachment span:not(.name):not(.file-icon) { /* Name und Icon ausschließen */
-     font-size: 0.9em; /* Dateiname/Größe etwas kleiner */
-     color: var(--text-secondary-color);
-     vertical-align: middle;
-}
-.file-attachment a {
-    color: var(--link-color);
-    text-decoration: underline;
-    font-size: 0.9em;
-    vertical-align: middle;
-}
-.file-attachment a:hover {
-    text-decoration: none;
-}
-.file-attachment p { /* Text unter dem Dateianhang */
-    margin-top: 8px; /* Abstand erhöht */
-    margin-bottom: 0;
-    font-size: 0.95em;
-}
 
 .typing-indicator {
-    padding: 10px 20px; /* Padding angepasst */
+    padding: 10px 20px;
     font-style: italic;
     color: var(--text-muted-color);
     font-size: 0.9em;
-    min-height: 25px; /* Minimale Höhe erhöht */
-    border-top: 1px solid var(--divider-color); /* Trennlinie */
-    background-color: var(--secondary-bg); /* Hintergrund wie Sidebar/Input */
+    min-height: 25px;
+    border-top: 1px solid var(--divider-color);
+    background-color: var(--secondary-bg);
     flex-shrink: 0;
 }
 
 
 .message-input-area {
     display: flex;
-    padding: 12px 20px; /* Padding erhöht */
+    padding: 12px 20px;
     background-color: var(--secondary-bg);
-    border-top: 1px solid var(--divider-color); /* Hellere Trennlinie */
+    border-top: 1px solid var(--divider-color);
     align-items: flex-end;
     gap: 10px; /* Abstand zwischen Elementen */
     flex-shrink: 0;
 }
 #messageInput {
     flex-grow: 1;
-    padding: 12px 15px; /* Padding angepasst */
+    padding: 12px 15px;
     border: 1px solid var(--border-color);
-    border-radius: 24px; /* Stärker gerundet */
+    border-radius: 24px;
     background-color: var(--content-element-bg);
     color: var(--text-color);
     resize: none;
     overflow-y: auto;
-    max-height: 120px; /* Max Höhe leicht erhöht */
+    max-height: 120px;
     font-size: 1em;
     line-height: 1.5;
 }
@@ -496,31 +453,22 @@ body {
 }
 
 .message-input-area #sendBtn {
-    margin-left: 0; /* Abstand durch Gap im Flexbox */
-    border-radius: 24px; /* Stärker gerundet */
-    padding: 12px 25px; /* Padding angepasst */
-    min-width: 80px; /* Mindestbreite */
+    margin-left: 0;
+    border-radius: 24px;
+    padding: 12px 25px;
+    min-width: 80px;
 }
 
-.file-upload-label {
-    padding: 10px 15px; /* Padding angepasst */
-    margin-left: 0; /* Abstand durch Gap im Flexbox */
-    border-radius: 24px; /* Stärker gerundet */
-    font-size: 1.3em; /* Größe leicht erhöht */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0; /* Verhindert Schrumpfen */
-}
+/* .file-upload-label stiles entfernt */
 
 
 .error-message {
     background-color: var(--error-bg);
     color: var(--error-text-color);
-    padding: 12px; /* Padding erhöht */
+    padding: 12px;
     text-align: center;
-    border-radius: 6px; /* Rundere Ecken */
-    margin: 15px 20px 0 20px; /* Margin angepasst */
+    border-radius: 6px;
+    margin: 15px 20px 0 20px;
     font-size: 0.95em;
 }
 
@@ -531,18 +479,18 @@ body {
 /* Responsive Anpassungen */
 @media (max-width: 768px) {
     body {
-        font-size: 14px; /* Kleinere Schrift auf Mobilgeräten */
+        font-size: 14px;
     }
     .app-container {
         width: 100%;
         height: 100vh;
         max-height: none;
         border-radius: 0;
-        box-shadow: none; /* Kein Schatten auf Mobilgeräten */
-        border: none; /* Kein Rahmen auf Mobilgeräten */
+        box-shadow: none;
+        border: none;
     }
     .app-header {
-        padding: 10px 15px; /* Padding angepasst */
+        padding: 10px 15px;
     }
      .app-header h1 {
          font-size: 1.5em;
@@ -554,53 +502,53 @@ body {
         width: 100%;
         border-right: none;
         border-bottom: 1px solid var(--divider-color);
-        max-height: 50vh; /* Sidebar kann bei Bedarf höher sein */
-        padding: 15px; /* Padding angepasst */
-        gap: 20px; /* Abstand reduziert */
+        max-height: 50vh;
+        padding: 15px;
+        gap: 20px;
     }
      .connection-controls input[type="text"],
      .connection-controls select,
      .connection-controls button,
      #localMuteBtn.mute-btn {
-         padding: 10px; /* Padding reduziert */
-         margin-bottom: 8px; /* Abstand reduziert */
-         border-radius: 4px; /* Kleinere Ecken */
-         font-size: 0.95em; /* Größe angepasst */
+         padding: 10px;
+         margin-bottom: 8px;
+         border-radius: 4px;
+         font-size: 0.95em;
      }
      .connection-controls select {
-         padding-right: 2.5em; /* Platz für Pfeil angepasst */
+         padding-right: 2.5em;
      }
      .connection-controls h2,
      .user-list-container h2,
      .audio-controls-section h3 {
-         font-size: 1.1em; /* Größe reduziert */
+         font-size: 1.1em;
          margin-bottom: 10px;
          padding-bottom: 6px;
      }
     .audio-controls-section {
-         gap: 10px; /* Abstand reduziert */
+         gap: 10px;
     }
     .remote-audio-item {
-         gap: 6px; /* Abstand reduziert */
-         font-size: 0.85em; /* Größe angepasst */
+         gap: 6px;
+         font-size: 0.85em;
     }
      .remote-audio-item button.mute-btn {
-         padding: 4px 8px; /* Padding reduziert */
-         font-size: 0.8em; /* Größe reduziert */
-         border-radius: 3px; /* Kleinere Ecken */
+         padding: 4px 8px;
+         font-size: 0.8em;
+         border-radius: 3px;
      }
 
     .messages-container {
-        padding: 15px; /* Padding reduziert */
-        gap: 10px; /* Abstand reduziert */
+        padding: 15px;
+        gap: 10px;
     }
     .message {
-        padding: 10px 14px; /* Padding reduziert */
-        border-radius: 14px; /* Weniger gerundet */
-        max-width: 90%; /* Max Breite erhöht */
-         margin-left: 6px; /* Abstand zum Rand angepasst */
+        padding: 10px 14px;
+        border-radius: 14px;
+        max-width: 90%;
+         margin-left: 6px;
          margin-right: 6px;
-         filter: none; /* Schatten auf Mobilgeräten entfernen */
+         filter: none;
     }
      .message.me {
           border-bottom-right-radius: 4px;
@@ -617,49 +565,30 @@ body {
           left: 8px;
       }
 
-    .file-attachment img {
-        max-width: 150px; /* Max Bildbreite reduziert */
-        max-height: 150px; /* Max Bildhöhe reduziert */
-         border-radius: 6px;
-         margin-bottom: 6px;
-    }
-    .file-attachment span.file-icon {
-         font-size: 2em; /* Größe angepasst */
-         margin-right: 6px;
-    }
-     .file-attachment span:not(.name):not(.file-icon) {
-         font-size: 0.85em;
-     }
-     .file-attachment p {
-         margin-top: 6px;
-     }
+    /* .file-attachment responsive stiles entfernt */
 
     .typing-indicator {
-        padding: 8px 15px; /* Padding angepasst */
+        padding: 8px 15px;
         min-height: 20px;
     }
 
     .message-input-area {
-        padding: 10px 15px; /* Padding angepasst */
-        gap: 8px; /* Abstand reduziert */
+        padding: 10px 15px;
+        gap: 8px;
     }
     #messageInput {
-        padding: 10px 12px; /* Padding reduziert */
-        border-radius: 20px; /* Weniger gerundet */
-        max-height: 80px; /* Max Höhe reduziert */
+        padding: 10px 12px;
+        border-radius: 20px;
+        max-height: 80px;
     }
      .message-input-area #sendBtn {
-          padding: 10px 20px; /* Padding angepasst */
+          padding: 10px 20px;
          border-radius: 20px;
      }
-     .file-upload-label {
-         padding: 8px 12px; /* Padding reduziert */
-         border-radius: 20px;
-         font-size: 1.1em; /* Größe angepasst */
-     }
+     /* .file-upload-label responsive stiles entfernt */
 
     .error-message {
-        padding: 10px; /* Padding reduziert */
-        margin: 10px 15px 0 15px; /* Margin angepasst */
+        padding: 10px;
+        margin: 10px 15px 0 15px;
     }
 }
