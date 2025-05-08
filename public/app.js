@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
         roomId: 'default-room',
         socketId: null,
         allUsersList: [],
+
         typingTimeout: null,
         typingUsers: new Set(),
 
@@ -60,7 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
         USER_COLORS: ['#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9700', '#ff5722', '#795548'],
     };
 
-    // --- Funktionsdefinitionen (jetzt VOR den Event Listenern) ---
+    // --- Funktionsdefinitionen ---
 
     function escapeHTML(str) {
         if (typeof str !== 'string') return String(str);
@@ -99,6 +100,19 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => {
             if (UI.errorMessage) UI.errorMessage.classList.add('hidden');
         }, 5000);
+    }
+
+    function initializeUI() {
+        console.log("[UI] initializeUI aufgerufen. state.connected:", state.connected);
+        UI.disconnectBtn.classList.add('hidden');
+        UI.shareScreenBtn.classList.add('hidden');
+        UI.sendBtn.disabled = true;
+        UI.messageInput.disabled = true;
+        setConnectionStatus('disconnected', 'Nicht verbunden');
+        loadStateFromLocalStorage();
+        if (UI.micSelect) UI.micSelect.disabled = false;
+        updateRemoteAudioControls();
+        updateRemoteScreenDisplay(null);
     }
 
     function updateUIAfterConnect() {
@@ -530,9 +544,6 @@ document.addEventListener('DOMContentLoaded', () => {
          event.target.classList.toggle('muted', audioElement.muted);
      }
 
-
-    // --- WebRTC Logic (Multi-Peer Audio + Optional Screen Share Viewing) ---
-
     async function setupLocalAudioStream() {
         console.log("[WebRTC] setupLocalAudioStream aufgerufen.");
         if (state.localAudioStream) {
@@ -608,7 +619,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
          const localMuteBtn = document.getElementById('localMuteBtn');
          if(localMuteBtn) {
-              // Event Listener NICHT entfernen
               localMuteBtn.classList.add('hidden');
          }
     }
@@ -708,7 +718,7 @@ document.addEventListener('DOMContentLoaded', () => {
          state.isSharingScreen = false;
          console.log("[WebRTC] isSharingScreen ist jetzt false.");
 
-         setupLocalAudioStream(); // Stelle den lokalen Audio-Stream (Mikrofon) wieder her
+         setupLocalAudioStream();
 
          if (sendSignal && socket && state.connected) {
              socket.emit('screenShareStatus', { sharing: false });
@@ -948,7 +958,6 @@ document.addEventListener('DOMContentLoaded', () => {
                  console.log(`[WebRTC] Entferne Sender für Track ${sender.track.id} (${trackKind}), da er nicht mehr im aktuellen Stream ist.`);
                 pc.removeTrack(sender);
             } else if (!sender.track) {
-                 // console.log("[WebRTC] Sender hat keinen Track."); // Kann passieren
             }
         });
 
@@ -978,7 +987,7 @@ document.addEventListener('DOMContentLoaded', () => {
                       addLocalStreamTracksToPeerConnection(pc, currentLocalStream);
                  } else {
                       console.log(`[WebRTC] Kein lokaler Stream zum Hinzufügen zur neuen PC (${user.id}).`);
-                      addLocalStreamTracksToPeerConnection(pc, null); // Sicherstellen, dass keine Tracks gesendet werden
+                       addLocalStreamTracksToPeerConnection(pc, null);
                  }
 
                  const shouldInitiateOffer = state.socketId < user.id;
@@ -1145,17 +1154,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
          if (isCurrentlyViewing && !forceStop) {
              console.log(`[UI] Klick auf "Anzeige stoppen" für Peer ${peerId}.`);
-             updateRemoteScreenDisplay(null); // Stoppt die Anzeige und setzt State/UI zurück
+             updateRemoteScreenDisplay(null);
 
-             // Nach dem Stoppen die "Ansehen" Buttons für alle teilenden User wieder aktivieren
               state.allUsersList.forEach(user => {
                   if (user.id !== state.socketId && user.sharingStatus) {
                        const sharerButton = document.querySelector(`#userList li .view-screen-button[data-peer-id='${user.id}']`);
                        if (sharerButton) sharerButton.disabled = false;
                   }
               });
-             // Der geklickte Button wird automatisch in updateRemoteScreenDisplay(null) durch userListUpdate zurückgesetzt.
-             // Wir müssen ihn hier nicht explizit ändern, da die Liste eh neu gerendert wird.
          } else if (!isCurrentlyViewing) {
              console.log(`[UI] Klick auf "Bildschirm ansehen" für Peer ${peerId}.`);
 
@@ -1170,7 +1176,7 @@ document.addEventListener('DOMContentLoaded', () => {
                       handleViewScreenClick({ target: { dataset: { peerId: state.currentlyViewingPeerId } } }, true);
                   }
 
-                 updateRemoteScreenDisplay(peerId); // Startet die Anzeige für diesen Peer
+                 updateRemoteScreenDisplay(peerId);
 
                  state.allUsersList.forEach(user => {
                       if (user.id !== state.socketId && user.sharingStatus && user.id !== peerId) {
@@ -1182,13 +1188,12 @@ document.addEventListener('DOMContentLoaded', () => {
                   clickedButton.textContent = 'Anzeige stoppen';
                   clickedButton.classList.remove('view');
                   clickedButton.classList.add('stop');
-                  // Der geklickte Button wird hier nicht disabled, nur die anderen.
+
 
              } else {
                  console.warn(`[UI] Peer ${peerId} teilt nicht oder Stream nicht verfügbar. Kann Bildschirm nicht ansehen.`);
                  displayError(`Bildschirm von ${sharerUser ? escapeHTML(sharerUser.username) : 'diesem Benutzer'} kann nicht angesehen werden.`);
-                 updateRemoteScreenDisplay(null); // Stellen sicher, dass nichts angezeigt wird
-                 // Der Button wird automatisch in updateRemoteScreenDisplay(null) durch userListUpdate zurückgesetzt.
+                 updateRemoteScreenDisplay(null);
              }
          } else if (isCurrentlyViewing && forceStop) {
               console.log(`[UI] Force Stop Anzeige für Peer ${peerId}.`);
@@ -1199,7 +1204,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     viewButton.textContent = 'Bildschirm ansehen';
                     viewButton.classList.remove('stop');
                     viewButton.classList.add('view');
-                    // Button wird in userListUpdate durch den generellen Aktivierungs-/Deaktivierungsloop gehandhabt
                }
 
               state.allUsersList.forEach(user => {
@@ -1213,15 +1217,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --- Init ---
-    // App initialisieren, wenn das DOM bereit ist
     console.log("[App] DOMContentLoaded. App wird initialisiert.");
-    function initializeUI() {
-    console.log("[UI] initializeUI aufgerufen.");
-    loadStateFromLocalStorage(); // Lade gespeicherte Zustände
-    updateUIAfterDisconnect(); // Setze die UI auf den Standard-Status (nicht verbunden)
-    populateMicList(); // Initialisiere die Mikrofonauswahl
-    console.log("[UI] UI erfolgreich initialisiert.");
-}
-    initializeUI(); // UI initialisieren und Status setzen
+    initializeUI();
 
-}); // Ende DOMContentLoaded
+});
