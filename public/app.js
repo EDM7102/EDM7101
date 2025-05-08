@@ -11,22 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
         statusIndicator: document.getElementById('statusIndicator'),
         errorMessage: document.getElementById('errorMessage'),
         micSelect: document.getElementById('micSelect'),
-        remoteAudioControls: document.getElementById('remoteAudioControls'),
-
-        // UI Elemente für Bildschirm teilen
-        shareScreenBtn: document.getElementById('shareScreenBtn'),
-        remoteScreenContainer: document.getElementById('remoteScreenContainer'),
-        remoteScreenSharerName: document.getElementById('remoteScreenSharerName'),
-        remoteScreenVideo: document.getElementById('remoteScreenVideo'),
-        remoteScreenFullscreenBtn: document.querySelector('#remoteScreenContainer .fullscreen-btn')
+        remoteAudioControls: document.getElementById('remoteAudioControls')
     };
-
-    // Dieser Log wird direkt nach dem Abrufen der UI-Elemente ausgeführt
-    console.log("[App] UI.connectBtn gefunden (nach UI-Abruf):", !!UI.connectBtn);
-    if (UI.connectBtn) {
-        console.log("[App] UI.connectBtn Element (nach UI-Abruf):", UI.connectBtn);
-    }
-
 
     let socket;
     let state = {
@@ -34,27 +20,19 @@ document.addEventListener('DOMContentLoaded', () => {
         username: '',
         roomId: 'default-room',
         socketId: null,
-        allUsersList: [],
-
+        allUsersList: [], // Komplette Liste der Benutzer im Raum vom Server
         typingTimeout: null,
         typingUsers: new Set(),
+        // lastMessageTimestamp, isWindowFocused, unreadMessages, originalTitle entfernt
 
-        notificationSound: new Audio('/notif.mp3'),
+        // Sound Effekt
+        notificationSound: new Audio('/notif.mp3'), // Sound-Datei im public-Ordner erwartet
 
-        // WebRTC State (Lokal)
+        // WebRTC State
         localAudioStream: null,
-        screenStream: null,
-        isSharingScreen: false,
-
-        // WebRTC State (Remote)
         peerConnections: new Map(),
         remoteAudioElements: new Map(),
-        remoteStreams: new Map(),
-
-        // Bildschirm teilen State (Remote Anzeige)
-        currentlyViewingPeerId: null,
-
-        localAudioMuted: false,
+        localAudioMuted: false
     };
 
     const CONFIG = {
@@ -65,34 +43,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 { urls: 'stun:stun1.l.google.com:19302' },
             ],
         },
-        USER_COLORS: ['#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9700', '#ff5722', '#795548'],
+        USER_COLORS: ['#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9800', '#ff5722', '#795548'],
     };
 
-    // --- Funktionsdefinitionen ---
-    // Alle Funktionsdefinitionen (inkl. connect, disconnect, etc.) bleiben hier oben
-
-    function escapeHTML(str) {
-        if (typeof str !== 'string') return String(str);
-        const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-        return str.replace(/[&<>"']/g, m => map[m]);
-    }
-
-    function getUserColor(userIdOrName) {
-        let hash = 0;
-        const str = String(userIdOrName);
-        for (let i = 0; i < str.length; i++) {
-            hash = str.charCodeAt(i) + ((hash << 5) - hash);
-        }
-        return CONFIG.USER_COLORS[Math.abs(hash) % CONFIG.USER_COLORS.length];
-    }
-
-    function playNotificationSound() {
-        if (state.notificationSound) {
-            state.notificationSound.currentTime = 0;
-             state.notificationSound.play().catch(e => {
-                 console.warn("Benachrichtigungssound konnte nicht abgespielt werden:", e);
-             });
-        }
+    // --- Initialisierung und UI-Helfer ---
+    function initializeUI() {
+        console.log("[UI] initializeUI aufgerufen. state.connected:", state.connected);
+        UI.disconnectBtn.classList.add('hidden');
+        UI.sendBtn.disabled = true;
+        UI.messageInput.disabled = true;
+        setConnectionStatus('disconnected', 'Nicht verbunden');
+        loadStateFromLocalStorage();
+        if (UI.micSelect) UI.micSelect.disabled = false;
+        updateRemoteAudioControls();
     }
 
     function setConnectionStatus(statusClass, text) {
@@ -110,361 +73,390 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 5000);
     }
 
-    function loadStateFromLocalStorage() {
-        try {
-            const storedState = localStorage.getItem('chatAppState');
-            if (storedState) {
-                state = { ...state, ...JSON.parse(storedState) };
-                if (state.username) {
-                    UI.usernameInput.value = state.username;
-                }
-            }
-        } catch (e) {
-            console.error("Fehler beim Laden des Zustands aus Local Storage:", e);
-            displayError("Fehler beim Laden gespeicherter Daten.");
-        }
-    }
-
-    // initializeUI wird angepasst, um Event Listener zuzuweisen
-    function initializeUI() {
-        console.log("[UI] initializeUI aufgerufen. state.connected:", state.connected);
-        // UI Elemente werden bereits am Anfang des DOMContentLoaded Blocks geholt
-
-        UI.disconnectBtn.classList.add('hidden');
-        UI.shareScreenBtn.classList.add('hidden');
-        UI.sendBtn.disabled = true;
-        UI.messageInput.disabled = true;
-        setConnectionStatus('disconnected', 'Nicht verbunden');
-        loadStateFromLocalStorage();
-        if (UI.micSelect) UI.micSelect.disabled = false;
-        updateRemoteAudioControls();
-        updateRemoteScreenDisplay(null);
-
-        // --- Event Listener Zuweisungen (JETZT INNERHALB von initializeUI) ---
-        // Dieser Block wird ausgeführt, NACHDEM UI-Elemente geholt sind und initializeUI gestartet wurde
-
-        console.log("[App] Event Listener werden ZUGJEWIESEN innerhalb von initializeUI."); // Debug Log
-        if (UI.connectBtn) { // Prüfen, ob Button gefunden wurde
-            UI.connectBtn.addEventListener('click', connect);
-            console.log("[App] connectBtn Listener ZUGJEWIESEN innerhalb von initializeUI."); // Debug Log
-        } else {
-             console.error("[App] connectBtn Element NICHT GEFUNDEN innerhalb von initializeUI!"); // Debug Log
-        }
-
-
-        if (UI.micSelect) UI.micSelect.addEventListener('change', async () => {
-            if (state.connected && !state.isSharingScreen) {
-                console.log("[WebRTC] Mikrofonauswahl geändert. Versuche lokalen Stream zu aktualisieren.");
-                await setupLocalAudioStream();
-            } else if (state.isSharingScreen) {
-                console.warn("[WebRTC] Mikrofonauswahl geändert während Bildschirmteilung. Ändert sich erst danach.");
-            } else {
-                 console.log("[WebRTC] Mikrofonauswahl geändert (nicht verbunden). Wird bei nächster Verbindung verwendet.");
-            }
-        });
-
-        if (UI.shareScreenBtn) UI.shareScreenBtn.addEventListener('click', toggleScreenSharing);
-
-         if (UI.remoteScreenFullscreenBtn) {
-             UI.remoteScreenFullscreenBtn.addEventListener('click', () => {
-                 if (UI.remoteScreenContainer) {
-                      toggleFullscreen(UI.remoteScreenContainer);
-                 }
-             });
-         }
-
-         document.addEventListener('fullscreenchange', () => {
-             if (UI.remoteScreenFullscreenBtn) {
-                  const isRemoteScreenInFullscreen = document.fullscreenElement === UI.remoteScreenContainer || (UI.remoteScreenContainer && UI.remoteScreenContainer.contains(document.fullscreenElement));
-                  UI.remoteScreenFullscreenBtn.textContent = isRemoteScreenInFullscreen ? "Vollbild verlassen" : "Vollbild";
-             }
-         });
-
-        window.addEventListener('beforeunload', () => {
-            if (socket && socket.connected) {
-                socket.disconnect();
-            }
-             stopLocalAudioStream();
-             stopScreenSharing(false);
-             closeAllPeerConnections();
-        });
-
-        // Globale Funktion für Vollbild
-        function toggleFullscreen(element) {
-            if (!element) {
-                 console.warn("[UI] toggleFullscreen: Element nicht gefunden.");
-                 return;
-            }
-            if (!document.fullscreenElement) {
-                if (element.requestFullscreen) {
-                    element.requestFullscreen().catch(err => console.error(`[UI] Fullscreen error: ${err.message}`, err));
-                } else if (element.webkitRequestFullscreen) {
-                    element.webkitRequestFullscreen().catch(err => console.error(`[UI] Fullscreen error (webkit): ${err.message}`, err));
-                } else if (element.msRequestFullscreen) {
-                    element.msRequestFullscreen().catch(err => console.error(`[UI] Fullscreen error (ms): ${err.message}`, err));
-                } else {
-                     console.warn("[UI] toggleFullscreen: Browser does not support Fullscreen API on this element.");
-                }
-            } else {
-                 console.log("[UI] toggleFullscreen: Exiting Fullscreen.");
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                } else if (document.webkitExitFullscreen) {
-                    document.webkitExitFullscreen();
-                } else if (document.msExitFullscreen) {
-                    document.msExitFullscreen();
-                }
-            }
-        }
-
-    } // Ende initializeUI Funktion
-
     function updateUIAfterConnect() {
-        if (!UI.connectBtn || !UI.disconnectBtn || !UI.sendBtn || !UI.messageInput) return;
+        console.log("[UI] updateUIAfterConnect aufgerufen.");
         UI.connectBtn.classList.add('hidden');
         UI.disconnectBtn.classList.remove('hidden');
-        UI.shareScreenBtn.classList.remove('hidden');
         UI.sendBtn.disabled = false;
         UI.messageInput.disabled = false;
-        setConnectionStatus('connected', 'Verbunden');
+        if (UI.usernameInput) UI.usernameInput.disabled = true;
+        if (UI.micSelect) UI.micSelect.disabled = true;
+        setConnectionStatus('connected', `Verbunden als ${state.username}`);
         saveStateToLocalStorage();
+
+        setupLocalAudioStream();
+        populateMicList();
     }
 
     function updateUIAfterDisconnect() {
-        if (!UI.connectBtn || !UI.disconnectBtn || !UI.sendBtn || !UI.messageInput) return;
+        console.log("[UI] updateUIAfterDisconnect aufgerufen.");
         UI.connectBtn.classList.remove('hidden');
         UI.disconnectBtn.classList.add('hidden');
-        UI.shareScreenBtn.classList.add('hidden');
         UI.sendBtn.disabled = true;
         UI.messageInput.disabled = true;
-        setConnectionStatus('disconnected', 'Getrennt');
+        if (UI.usernameInput) UI.usernameInput.disabled = false;
+        if (UI.micSelect) UI.micSelect.disabled = false;
+        setConnectionStatus('disconnected', 'Nicht verbunden');
+        UI.userList.innerHTML = '';
+        const userCountPlaceholder = document.getElementById('userCountPlaceholder');
+        if (userCountPlaceholder) userCountPlaceholder.textContent = '0';
+        UI.typingIndicator.textContent = '';
+
         stopLocalAudioStream();
-        stopScreenSharing(false);
         closeAllPeerConnections();
+        updateRemoteAudioControls();
+
+        state.users = {};
+        state.allUsersList = [];
+        state.socketId = null;
     }
 
     function saveStateToLocalStorage() {
-        try {
-            const stateToSave = { username: state.username };
-            localStorage.setItem('chatAppState', JSON.stringify(stateToSave));
-        } catch (e) {
-            console.error("Fehler beim Speichern des Zustands im Local Storage:", e);
-            displayError("Fehler beim Speichern von Daten.");
+        localStorage.setItem('chatClientUsername', UI.usernameInput.value);
+    }
+
+    function loadStateFromLocalStorage() {
+        const savedUsername = localStorage.getItem('chatClientUsername');
+        if (savedUsername) {
+            UI.usernameInput.value = savedUsername;
         }
     }
 
-    function populateMicList(devices) {
-        if (!UI.micSelect) return;
-        UI.micSelect.innerHTML = '<option value="">Standard-Mikrofon</option>';
-        devices.forEach(device => {
-            const option = document.createElement('option');
-            option.value = device.deviceId;
-            option.text = device.label || `Mikrofon ${UI.micSelect.options.length}`;
-            UI.micSelect.add(option);
-        });
-    }
-
-    function updateUserList(users) {
-        if (!UI.userList) return;
-        UI.userList.innerHTML = '';
-        if (users && users.length > 0) {
-            users.forEach(user => {
-                const li = document.createElement('li');
-                li.innerHTML = `
-                    <span class="user-dot" style="background-color: <span class="math-inline">\{user\.color \|\| getUserColor\(user\.id\)\}"\></span\>
-<strong\></span>{escapeHTML(user.username)}</strong>
-                    ${user.sharingStatus ? '<span class="sharing-indicator"> (teilt)</span>' : ''}
-                    ${user.id !== state.socketId && user.sharingStatus ? `<button class="view-screen-button view" data-peer-id="${user.id}">Bildschirm ansehen</button>` : ''}
-                `;
-                UI.userList.appendChild(li);
-            });
-            document.querySelectorAll('#userList li .view-screen-button').forEach(button => {
-                button.addEventListener('click', handleViewScreenClick);
-            });
-            document.getElementById('userCountPlaceholder').textContent = users.length.toString();
+    // --- Event Listener ---
+    UI.connectBtn.addEventListener('click', connect);
+    UI.disconnectBtn.addEventListener('click', disconnect);
+    UI.sendBtn.addEventListener('click', sendMessage);
+    UI.messageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
         } else {
-            document.getElementById('userCountPlaceholder').textContent = '0';
+            sendTyping();
         }
-        state.allUsersList = users;
-        updatePeerConnections(users.filter(user => user.id !== state.socketId));
+    });
+    UI.messageInput.addEventListener('input', () => {
+        UI.messageInput.style.height = 'auto';
+        let newHeight = UI.messageInput.scrollHeight;
+        const maxHeight = 100;
+        if (maxHeight && newHeight > maxHeight) newHeight = maxHeight;
+        UI.messageInput.style.height = newHeight + 'px';
+    });
+
+    if (UI.micSelect) UI.micSelect.addEventListener('change', async () => {
+        if (state.connected) {
+            console.log("[WebRTC] Mikrofonauswahl geändert. Versuche lokalen Stream zu aktualisieren.");
+            await setupLocalAudioStream();
+        } else {
+             console.log("[WebRTC] Mikrofonauswahl geändert (nicht verbunden). Wird bei nächster Verbindung verwendet.");
+        }
+    });
+
+    window.addEventListener('beforeunload', () => {
+        if (socket && socket.connected) {
+            socket.disconnect();
+        }
+         stopLocalAudioStream();
+         closeAllPeerConnections();
+    });
+
+
+    // --- Utility Functions ---
+    function escapeHTML(str) {
+        if (typeof str !== 'string') return String(str);
+        const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+        return str.replace(/[&<>"']/g, m => map[m]);
+    }
+
+    function getUserColor(userIdOrName) {
+        let hash = 0;
+        const str = String(userIdOrName);
+        for (let i = 0; i < str.length; i++) {
+            hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        return CONFIG.USER_COLORS[Math.abs(hash) % CONFIG.USER_COLORS.length];
+    }
+
+    // Funktion zum Abspielen des Benachrichtigungssounds
+    function playNotificationSound() {
+        if (state.notificationSound) {
+            // Optional: Prüfen, ob das Fenster aktiv ist, um aufdringliche Sounds zu vermeiden
+            // if (!document.hidden) { // Wenn Fenster aktiv ist, evtl. keinen Sound spielen
+            //    return;
+            // }
+            // Sound neu laden, um ihn auch bei schnellen Ereignissen abzuspielen
+            state.notificationSound.currentTime = 0; // Setzt die Wiedergabeposition an den Anfang
+             state.notificationSound.play().catch(e => {
+                 // Fehler beim Abspielen (z.B. Autoplay blockiert) abfangen
+                 console.warn("Benachrichtigungssound konnte nicht abgespielt werden:", e);
+                 // Dem Benutzer eventuell einen Hinweis geben, dass Sounds blockiert sind
+             });
+        }
+    }
+
+
+    // --- Media Device Functions ---
+    async function populateMicList() {
+        console.log("[Media] populateMicList aufgerufen.");
+        if (!UI.micSelect) {
+            console.warn("[Media] populateMicList: UI.micSelect nicht gefunden.");
+            return;
+        }
+        UI.micSelect.innerHTML = '';
+        UI.micSelect.appendChild(new Option("Standard-Mikrofon", "", true, true));
+
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioInputs = devices.filter(d => d.kind === 'audioinput');
+
+            if (audioInputs.length > 0) {
+                 audioInputs.forEach(d => {
+                     if (d.deviceId !== 'default' && d.label) {
+                          const opt = new Option(d.label, d.deviceId);
+                          UI.micSelect.appendChild(opt);
+                     }
+                 });
+                 console.log(`[Media] ${audioInputs.length} Mikrofone gefunden.`);
+            } else {
+                 console.warn("[Media] populateMicList: Keine Mikrofone gefunden.");
+            }
+        } catch (e) {
+            console.error("[Media] populateMicList: Fehler bei der Mikrofonauflistung:", e.name, e.message);
+             const opt = new Option(`Mikrofonliste Fehler: ${e.name}`, "");
+             opt.style.color = 'var(--error-bg)';
+             UI.micSelect.appendChild(opt);
+        }
+    }
+
+    // --- UI Update Functions ---
+
+    function updateUserList(usersArrayFromServer) {
+        // Prüfen, ob neue Benutzer hinzugekommen sind, bevor die Liste aktualisiert wird
+        const oldUsers = state.allUsersList;
+        state.allUsersList = usersArrayFromServer; // Komplette Liste vom Server
+
+        const userCountPlaceholder = document.getElementById('userCountPlaceholder');
+        if (userCountPlaceholder) userCountPlaceholder.textContent = usersArrayFromServer.length;
+
+        const otherUsers = usersArrayFromServer.filter(user => user.id !== state.socketId);
+
+        UI.userList.innerHTML = ''; // Liste in der UI leeren
+
+        usersArrayFromServer.forEach(user => {
+            const li = document.createElement('li');
+            const dot = document.createElement('span');
+            dot.className = 'user-dot';
+            dot.style.backgroundColor = escapeHTML(user.color || getUserColor(user.id));
+            li.appendChild(dot);
+
+            const nameNode = document.createTextNode(` ${escapeHTML(user.username)}`);
+            if (user.id === state.socketId) {
+                const strong = document.createElement('strong');
+                strong.appendChild(nameNode);
+                strong.appendChild(document.createTextNode(" (Du)"));
+                li.appendChild(strong);
+
+                 let localMuteBtn = document.getElementById('localMuteBtn');
+                 if (!localMuteBtn) {
+                     localMuteBtn = document.createElement('button');
+                     localMuteBtn.id = 'localMuteBtn';
+                     localMuteBtn.textContent = 'Mikro stumm schalten';
+                     localMuteBtn.classList.add('mute-btn');
+                     localMuteBtn.classList.add('hidden'); // Start Hidden
+                     localMuteBtn.addEventListener('click', toggleLocalAudioMute);
+                     UI.micSelect.parentNode.insertBefore(localMuteBtn, UI.connectBtn);
+                 }
+                 if (state.connected) {
+                      localMuteBtn.classList.remove('hidden');
+                      updateLocalMuteButtonUI();
+                 } else {
+                      localMuteBtn.classList.add('hidden');
+                 }
+
+            } else {
+                li.appendChild(nameNode);
+
+                // Prüfen, ob dieser Benutzer neu ist (für Sound-Benachrichtigung)
+                if (state.connected && oldUsers.length > 0 && !oldUsers.some(oldUser => oldUser.id === user.id)) {
+                     console.log(`[UI] Neuer Benutzer beigetreten: ${user.username}`);
+                     playNotificationSound(); // Sound abspielen, wenn ein NEUER Benutzer beitritt
+                }
+
+            }
+            UI.userList.appendChild(li);
+        });
+
+         updateRemoteAudioControls(otherUsers);
+         updatePeerConnections(otherUsers);
+
+         if (UI.remoteAudioControls) {
+              if (otherUsers.length > 0) {
+                   UI.remoteAudioControls.classList.remove('hidden');
+              } else {
+                   UI.remoteAudioControls.classList.add('hidden');
+              }
+         }
+
+          // Prüfen, ob Benutzer den Raum verlassen haben (optionaler Sound)
+          // Die WebRTC closePeerConnection triggert auch die Bereinigung.
+          // Ein Sound hier wäre für den Fall, dass jemand einfach weg ist.
+          // if (state.connected && oldUsers.length > usersArrayFromServer.length) {
+          //     const goneUsers = oldUsers.filter(oldUser => !usersArrayFromServer.some(newUser => newUser.id === oldUser.id));
+          //     if (goneUsers.length > 0) {
+          //          console.log(`[UI] Benutzer hat/haben den Raum verlassen: ${goneUsers.map(u => u.username).join(', ')}`);
+          //          // playNotificationSound(); // Optional: Sound auch bei verlassen
+          //     }
+          // }
+
     }
 
     function updateTypingIndicatorDisplay() {
         if (!UI.typingIndicator) return;
-        const typingUsernames = Array.from(state.typingUsers);
-        if (typingUsernames.length > 0) {
-            UI.typingIndicator.textContent = `${typingUsernames.map(name => escapeHTML(name)).join(', ')} schreibt gerade...`;
-            UI.typingIndicator.style.display = 'block';
+        const typingUsernames = state.typingUsers;
+        if (typingUsernames && typingUsernames.size > 0) {
+            const othersTyping = Array.from(typingUsernames).filter(name => name !== state.username);
+            if (othersTyping.length > 0) {
+                 const usersString = othersTyping.map(escapeHTML).join(', ');
+                 UI.typingIndicator.textContent = `${usersString} schreibt...`;
+                 UI.typingIndicator.style.display = 'block';
+            } else {
+                 UI.typingIndicator.style.display = 'none';
+            }
         } else {
             UI.typingIndicator.style.display = 'none';
         }
     }
 
-    function updateRemoteAudioControls() {
-        if (!UI.remoteAudioControls) return;
-        UI.remoteAudioControls.classList.toggle('hidden', state.peerConnections.size === 0);
-        UI.remoteAudioControls.innerHTML = '<h3>Sprach-Teilnehmer</h3>';
-        state.peerConnections.forEach((pc, peerId) => {
-            const user = state.allUsersList.find(u => u.id === peerId);
-            if (!user) return;
+    // Aktualisiert die dynamische UI für die Audio-Steuerung der Remote-Peers
+    function updateRemoteAudioControls(remoteUsers = []) {
+         if (!UI.remoteAudioControls) return;
 
-            const itemDiv = document.createElement('div');
-            itemDiv.classList.add('remote-audio-item');
-            itemDiv.innerHTML = `
-                <span style="color: <span class="math-inline">\{user\.color \|\| getUserColor\(peerId\)\}"\></span>{escapeHTML(user.username)}</span>
-                <button class="mute-btn" data-peer-id="${peerId}">Stumm</button>
-            `;
-            UI.remoteAudioControls.appendChild(itemDiv);
-        });
-        document.querySelectorAll('#remoteAudioControls .mute-btn').forEach(button => {
-            button.addEventListener('click', toggleRemoteAudioMute);
-        });
-        updateAllRemoteMuteButtons();
-    }
-
-    function updateRemoteScreenDisplay(peerId) {
-        if (!UI.remoteScreenContainer || !UI.remoteScreenVideo || !UI.remoteScreenSharerName) return;
-
-        if (peerId) {
-            const user = state.allUsersList.find(u => u.id === peerId);
-            if (user) {
-                UI.remoteScreenContainer.classList.remove('hidden');
-                UI.remoteScreenSharerName.textContent = escapeHTML(user.username);
-                const stream = state.remoteStreams.get(peerId);
-                if (stream) {
-                    UI.remoteScreenVideo.srcObject = stream;
-                } else {
-                    UI.remoteScreenVideo.srcObject = null;
-                }
-                state.currentlyViewingPeerId = peerId;
-            } else {
-                UI.remoteScreenContainer.classList.add('hidden');
-                UI.remoteScreenVideo.srcObject = null;
-                UI.remoteScreenSharerName.textContent = '';
-                state.currentlyViewingPeerId = null;
-            }
-        } else {
-            UI.remoteScreenContainer.classList.add('hidden');
-            UI.remoteScreenVideo.srcObject = null;
-            UI.remoteScreenSharerName.textContent = '';
-            state.currentlyViewingPeerId = null;
-        }
-        updateAllViewScreenButtons();
-    }
-
-    function ensureRemoteAudioElementExists(peerId) {
-        if (state.remoteAudioElements.has(peerId)) {
-            return state.remoteAudioElements.get(peerId);
-        }
-        const audioElement = new Audio();
-        audioElement.autoplay = true;
-        audioElement.controls = false;
-        state.remoteAudioElements.set(peerId, audioElement);
-        return audioElement;
-    }
-
-    function removeRemoteAudioElement(peerId) {
-        if (state.remoteAudioElements.has(peerId)) {
-            const audioElement = state.remoteAudioElements.get(peerId);
-            audioElement.pause();
-            audioElement.srcObject = null;
-            state.remoteAudioElements.delete(peerId);
-        }
-    }
-
-    function toggleLocalAudioMute() {
-        if (!state.localAudioStream) return;
-        state.localAudioMuted = !state.localAudioMuted;
-        state.localAudioStream.getTracks().forEach(track => {
-            if (track.kind === 'audio') {
-                track.enabled = !state.localAudioMuted;
-            }
-        });
-        updateLocalMuteButtonUI();
-    }
-
-    function updateLocalMuteButtonUI() {
-        if (!UI.localMuteBtn) return;
-        UI.localMuteBtn.textContent = state.localAudioMuted ? 'Mikrofon an' : 'Mikro stumm schalten';
-        UI.localMuteBtn.classList.toggle('muted', state.localAudioMuted);
-    }
-
-    function toggleRemoteAudioMute(event) {
-        const peerId = event.target.dataset.peerId;
-        if (!peerId || !state.remoteAudioElements.has(peerId)) return;
-
-        const audioElement = state.remoteAudioElements.get(peerId);
-        audioElement.muted = !audioElement.muted;
-        updateAllRemoteMuteButtons();
-    }
-
-    function updateAllRemoteMuteButtons() {
-        if (!UI.remoteAudioControls) return;
-        UI.remoteAudioControls.querySelectorAll('.mute-btn').forEach(button => {
-            const peerId = button.dataset.peerId;
-            if (state.remoteAudioElements.has(peerId)) {
-                button.textContent = state.remoteAudioElements.get(peerId).muted ? 'Ton an' : 'Stumm';
-                button.classList.toggle('muted', state.remoteAudioElements.get(peerId).muted);
-            }
-        });
-    }
-
-    async function setupLocalAudioStream() {
-        console.log("[WebRTC] setupLocalAudioStream aufgerufen.");
-        try {
-            const constraints = {
-                audio: {
-                    deviceId: UI.micSelect.value ? { exact: UI.micSelect.value } : undefined,
-                },
-                video: false,
-            };
-
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            console.log("[WebRTC] Lokalen Audio-Stream erhalten:", stream);
-            state.localAudioStream = stream;
-            updateLocalMuteButtonUI();
-            updateAllRemoteMuteButtons();
-            return stream;
-
-        } catch (error) {
-            console.error("[WebRTC] Fehler beim Abrufen des lokalen Audio-Streams:", error);
-            displayError("Zugriff auf Mikrofon verweigert oder kein Mikrofon gefunden.");
-            return null;
-        }
-    }
-
-    function stopLocalAudioStream() {
-        if (state.localAudioStream) {
-            console.log("[WebRTC] Stoppe lokalen Audio-Stream.");
-            state.localAudioStream.getTracks().forEach(track => track.stop());
-            state.localAudioStream = null;
-            updateLocalMuteButtonUI();
-            updateAllRemoteMuteButtons();
-        } else {
-             console.log("[WebRTC] Kein lokaler Audio-Stream zum Stoppen.");
-        }
-    }
-
-
-    function updateAllViewScreenButtons() {
-         if (!UI.userList) return;
-         UI.userList.querySelectorAll('.view-screen-button').forEach(button => {
-             const peerId = button.dataset.peerId;
-             if (peerId === state.currentlyViewingPeerId) {
-                  button.textContent = 'Anzeige stoppen';
-                  button.classList.remove('view');
-                  button.classList.add('stop');
-             } else {
-                  button.textContent = 'Bildschirm ansehen';
-                  button.classList.remove('stop');
-                  button.classList.add('view');
-             }
+         const mutedStates = new Map();
+         state.remoteAudioElements.forEach((audioEl, peerId) => {
+             mutedStates.set(peerId, audioEl.muted);
          });
+
+         UI.remoteAudioControls.innerHTML = '';
+
+         if (remoteUsers.length > 0) {
+             const title = document.createElement('h3');
+             title.textContent = 'Sprach-Teilnehmer';
+             UI.remoteAudioControls.appendChild(title);
+
+             remoteUsers.forEach(user => {
+                 const itemDiv = document.createElement('div');
+                 itemDiv.classList.add('remote-audio-item');
+                 itemDiv.id = `remoteAudioItem_${user.id}`;
+
+                 const nameSpan = document.createElement('span');
+                 nameSpan.textContent = escapeHTML(user.username);
+                 nameSpan.style.color = escapeHTML(user.color || getUserColor(user.id));
+                 itemDiv.appendChild(nameSpan);
+
+                 const muteBtn = document.createElement('button');
+                 muteBtn.textContent = 'Stumm schalten';
+                 muteBtn.classList.add('mute-btn');
+                 muteBtn.dataset.peerId = user.id;
+                 muteBtn.addEventListener('click', toggleRemoteAudioMute);
+
+                 const isMuted = mutedStates.has(user.id) ? mutedStates.get(user.id) : false;
+                 muteBtn.classList.toggle('muted', isMuted);
+                 muteBtn.textContent = isMuted ? 'Stumm AN' : 'Stumm schalten';
+
+
+                 itemDiv.appendChild(muteBtn);
+
+                 UI.remoteAudioControls.appendChild(itemDiv);
+
+                  ensureRemoteAudioElementExists(user.id);
+             });
+         }
     }
 
-    // Startet die Socket.IO Verbindung (Funktion, die von Klick aufgerufen wird)
-    function connect() { // <-- DEFINITION DER CONNECT FUNKTION
-        console.log("[Socket.IO] connect() button clicked."); // Debug Log am Anfang des Aufrufs
+    // Stellt sicher, dass ein <audio> Element für einen Remote-Peer existiert
+    function ensureRemoteAudioElementExists(peerId) {
+        let audioElement = state.remoteAudioElements.get(peerId);
+        if (!audioElement) {
+            console.log(`[WebRTC] Erstelle neues Audio-Element für Peer ${peerId}.`);
+            audioElement = new Audio();
+            audioElement.autoplay = true;
+            audioElement.style.display = 'none';
+            document.body.appendChild(audioElement);
+
+            state.remoteAudioElements.set(peerId, audioElement);
+             console.log(`[WebRTC] Audio-Element für Peer ${peerId} erstellt und hinzugefügt.`);
+
+             const muteButton = UI.remoteAudioControls.querySelector(`.mute-btn[data-peer-id='${peerId}']`);
+             if (muteButton) {
+                  audioElement.muted = muteButton.classList.contains('muted');
+             } else {
+                  audioElement.muted = false;
+             }
+        }
+         return audioElement;
+    }
+
+    // Entfernt das Audio-Element eines Remote-Peers
+    function removeRemoteAudioElement(peerId) {
+         const audioElement = state.remoteAudioElements.get(peerId);
+         if (audioElement) {
+             console.log(`[WebRTC] Entferne Audio-Element für Peer ${peerId}.`);
+             audioElement.pause();
+             audioElement.srcObject = null;
+             audioElement.remove();
+             state.remoteAudioElements.delete(peerId);
+             console.log(`[WebRTC] Audio-Element für Peer ${peerId} entfernt.`);
+         }
+         const itemDiv = document.getElementById(`remoteAudioItem_${peerId}`);
+         if (itemDiv) {
+             itemDiv.remove();
+         }
+    }
+
+     // Schaltet das lokale Mikrofon stumm/aktiv
+    function toggleLocalAudioMute() {
+         if (!state.localAudioStream) {
+             console.warn("[WebRTC] toggleLocalAudioMute: Lokaler Audio-Stream nicht verfügbar.");
+             return;
+         }
+         state.localAudioMuted = !state.localAudioMuted;
+         console.log(`[WebRTC] Lokales Mikrofon: ${state.localAudioMuted ? 'Stumm' : 'Aktiv'}`);
+
+         state.localAudioStream.getAudioTracks().forEach(track => {
+             track.enabled = !state.localAudioMuted;
+         });
+
+         updateLocalMuteButtonUI();
+    }
+
+     // Aktualisiert die UI des lokalen Mute-Buttons
+     function updateLocalMuteButtonUI() {
+         const localMuteBtn = document.getElementById('localMuteBtn');
+         if (localMuteBtn) {
+             localMuteBtn.textContent = state.localAudioMuted ? 'Mikro Stumm AN' : 'Mikro stumm schalten';
+             localMuteBtn.classList.toggle('muted', state.localAudioMuted);
+             localMuteBtn.classList.toggle('active', !state.localAudioMuted); // Zusätzliche Klasse für Aktiv-Status (optional für CSS)
+         }
+     }
+
+     // Schaltet den Audio-Stream eines Remote-Peers lokal stumm/aktiv
+     function toggleRemoteAudioMute(event) {
+         const peerId = event.target.dataset.peerId;
+         const audioElement = state.remoteAudioElements.get(peerId);
+         if (!audioElement) {
+             console.warn(`[WebRTC] toggleRemoteAudioMute: Audio-Element für Peer ${peerId} nicht gefunden.`);
+             return;
+         }
+
+         audioElement.muted = !audioElement.muted;
+         console.log(`[WebRTC] Audio von Peer ${peerId} lokal ${audioElement.muted ? 'gemutet' : 'aktiviert'}.`);
+
+         event.target.textContent = audioElement.muted ? 'Stumm AN' : 'Stumm schalten';
+         event.target.classList.toggle('muted', audioElement.muted);
+     }
+
+
+    // --- WebSocket Logic ---
+    function connect() {
         console.log("[Socket.IO] connect() aufgerufen.");
         const serverUrl = window.location.origin;
         const roomId = state.roomId;
@@ -490,7 +482,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setupSocketListeners();
     }
 
-    // Richtet alle Socket.IO Event Listener ein
     function setupSocketListeners() {
         if (!socket) return;
         console.log("[Socket.IO] setupSocketListeners aufgerufen.");
@@ -522,6 +513,9 @@ document.addEventListener('DOMContentLoaded', () => {
                   state.username = selfUser.username;
              }
             updateUIAfterConnect();
+            // userListUpdate wird direkt nach joinSuccess vom Server gesendet,
+            // was update PeerConnections und updateRemoteAudioControls triggert.
+            // update UserList hier initial aufrufen, um die UI sofort zu setzen
             updateUserList(currentUsers);
         });
 
@@ -529,20 +523,24 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error(`[Socket.IO] "joinError" erhalten: ${message}`);
             displayError(message);
             if (socket && socket.connected) {
-                 console.log("[Socket.IO] JoinError erhalten, Socket ist noch verbunden. Manuelles Trennen.");
-                 socket.disconnect();
-             } else {
-                 console.log("[Socket.IO] JoinError erhalten, Socket war bereits getrennt oder wird getrennt.");
-             }
+                console.log("[Socket.IO] JoinError erhalten, Socket ist noch verbunden. Manuelles Trennen.");
+                socket.disconnect();
+            } else {
+                console.log("[Socket.IO] JoinError erhalten, Socket war bereits getrennt oder wird getrennt.");
+            }
         });
 
         socket.on('userListUpdate', (currentUsersList) => {
             console.log("[Socket.IO] Benutzerliste aktualisiert:", currentUsersList);
-            updateUserList(currentUsersList);
+            // Hier wird geprüft, ob neue Benutzer hinzugekommen sind, um den Sound zu spielen.
+            // Die eigentliche UI-Aktualisierung und WebRTC-Logik passiert in updateUserList.
+             updateUserList(currentUsersList); // Diese Funktion enthält die Logik zum Abspielen des Sounds bei neuen Usern
+
         });
 
         socket.on('chatMessage', (message) => {
             appendMessage(message);
+            // Sound abspielen, wenn es keine eigene Nachricht ist
             if (message.id !== state.socketId) {
                  console.log("[Socket.IO] Neue Nachricht von anderem Benutzer. Sound abspielen.");
                 playNotificationSound();
@@ -559,8 +557,9 @@ document.addEventListener('DOMContentLoaded', () => {
             updateTypingIndicatorDisplay();
         });
 
-        // --- WebRTC Signalisierungs-Listener ---
+        // --- WebRTC Signalisierungs-Listener (Multi-Peer) ---
         socket.on('webRTC-signal', async ({ from, type, payload }) => {
+             // console.log(`[WebRTC Signal] Empfange '${type}' von Peer ${from}.`); // Zu viele Logs
              if (from === state.socketId) {
                  return;
              }
@@ -569,12 +568,12 @@ document.addEventListener('DOMContentLoaded', () => {
              if (!pc) {
                  console.warn(`[WebRTC Signal] Empfange Signal von unbekanntem Peer ${from}. Erstelle PeerConnection.`);
                  pc = await createPeerConnection(from);
-                 addLocalStreamTracksToPeerConnection(pc, state.isSharingScreen ? state.screenStream : state.localAudioStream);
+                 addLocalStreamToPeerConnection(pc);
              }
 
             try {
                  if (type === 'offer') {
-                    console.log(`[WebRTC Signal] Peer ${from}: Setze Remote Description (Offer).`);
+                    console.log(`[WebRTC Signal] Peer ${from}: Setze Remote Description (Offer).`); // Signaling State: ${pc.signalingState}
                     const isPolite = state.socketId < from;
 
                     if (pc.signalingState !== 'stable' && pc.localDescription && isPolite) {
@@ -583,24 +582,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     await pc.setRemoteDescription(new RTCSessionDescription(payload));
-                    console.log(`[WebRTC Signal] Peer ${from}: Remote Description (Offer) gesetzt.`);
+                    console.log(`[WebRTC Signal] Peer ${from}: Remote Description (Offer) gesetzt.`); // Neuer Signaling State: ${pc.signalingState}
 
                     console.log(`[WebRTC Signal] Peer ${from}: Erstelle Answer.`);
                     const answer = await pc.createAnswer();
                     console.log(`[WebRTC Signal] Peer ${from}: Setze Local Description (Answer).`);
                     await pc.setLocalDescription(answer);
-                    console.log(`[WebRTC Signal] Peer ${from}: Local Description (Answer) gesetzt.`);
+                    console.log(`[WebRTC Signal] Peer ${from}: Local Description (Answer) gesetzt.`); // Neuer Signaling State: ${pc.signalingState}
 
                     console.log(`[WebRTC Signal] Peer ${from}: Sende Answer.`);
                     socket.emit('webRTC-signal', { to: from, type: 'answer', payload: pc.localDescription });
 
                  } else if (type === 'answer') {
-                     console.log(`[WebRTC Signal] Peer ${from}: Setze Remote Description (Answer).`);
+                     console.log(`[WebRTC Signal] Peer ${from}: Setze Remote Description (Answer).`); // Signaling State: ${pc.signalingState}
                     if (pc.signalingState === 'have-local-offer') {
                         await pc.setRemoteDescription(new RTCSessionDescription(payload));
-                         console.log(`[WebRTC Signal] Peer ${from}: Remote Description (Answer) gesetzt.`);
+                         console.log(`[WebRTC Signal] Peer ${from}: Remote Description (Answer) gesetzt.`); // Neuer Signaling State: ${pc.signalingState}
                     } else {
-                        console.warn(`[WebRTC Signal] Peer <span class="math-inline">\{from\}\: Empfange Answer im falschen Signaling State \(</span>{pc.signalingState}). Ignoriere.`);
+                        console.warn(`[WebRTC Signal] Peer ${from}: Empfange Answer im falschen Signaling State (${pc.signalingState}). Ignoriere.`);
                     }
 
                  } else if (type === 'candidate') {
@@ -618,150 +617,179 @@ document.addEventListener('DOMContentLoaded', () => {
                 displayError(`Fehler bei Audio-Verhandlung mit Peer ${from}.`);
             }
         });
+    } // End setupSocketListeners
 
-        socket.on('screenShareStatus', ({ id, sharing }) => {
-            console.log(`[Socket.IO] screenShareStatus von ${id} erhalten: ${sharing}. (Wird von userListUpdate verarbeitet)`);
-        });
+
+    function disconnect() {
+        console.log("[Socket.IO] Trenne Verbindung manuell.");
+        if (socket) {
+            socket.disconnect();
+        } else {
+            console.log("[Socket.IO] Kein Socket zum Trennen gefunden.");
+            updateUIAfterDisconnect();
+        }
     }
 
-    // Startet die Bildschirmteilung
-    async function startScreenSharing() {
-        console.log("[WebRTC] startScreenSharing aufgerufen.");
-        if (!state.connected) {
-             console.warn("[WebRTC] Nicht verbunden, kann Bildschirm nicht teilen.");
-             return false;
+    // --- Chat Logic ---
+    function sendMessage() {
+        console.log("sendMessage() aufgerufen.");
+        const content = UI.messageInput.value.trim();
+        if (!content) {
+            console.log("sendMessage: Inhalt leer. Abbruch.");
+            return;
         }
-        if (state.isSharingScreen) {
-             console.warn("[WebRTC] Bildschirm wird bereits geteilt.");
-             return true;
+
+        if (!socket || !state.connected) {
+            console.error("[Chat Send Error] Cannot send message. Not connected.");
+            displayError("Nicht verbunden. Nachricht kann nicht gesendet werden.");
+            return;
+        }
+
+        const message = {
+             content,
+             timestamp: new Date().toISOString(),
+             type: 'text'
+             // Sender info (id, username, color) wird vom Server hinzugefügt
+        };
+
+        console.log(`sendMessage: Sende Textnachricht: "${message.content.substring(0, Math.min(message.content.length, 50))}..."`);
+        socket.emit('message', message);
+
+
+        UI.messageInput.value = '';
+        UI.messageInput.style.height = 'auto';
+        UI.messageInput.focus();
+        sendTyping(false);
+    }
+
+    // Fügt eine eingehende (oder eigene gesendete) Nachricht zum Chat hinzu
+    function appendMessage(msg) {
+         if (!msg || !msg.content || !msg.id || !msg.username) {
+            console.warn("appendMessage: Ungültige Nachrichtendaten erhalten.", msg);
+            return;
+        }
+
+        const msgDiv = document.createElement('div');
+        msgDiv.classList.add('message');
+        const isMe = msg.id === state.socketId;
+        if (isMe) msgDiv.classList.add('me');
+
+        const nameSpan = document.createElement('span');
+        nameSpan.classList.add('name');
+        nameSpan.textContent = escapeHTML(msg.username);
+        nameSpan.style.color = escapeHTML(msg.color || getUserColor(msg.id));
+
+        const contentDiv = document.createElement('div');
+        contentDiv.classList.add('content');
+
+        // Nur Textinhalt anzeigen
+        contentDiv.textContent = escapeHTML(msg.content);
+
+        // Zeitstempel-Logik entfernt
+        // const timeSpan = document.createElement('span');
+        // timeSpan.classList.add('timestamp');
+        // try { ... } catch { ... }
+        // msgDiv.appendChild(timeSpan); // Entfernt
+
+
+        msgDiv.appendChild(nameSpan);
+        msgDiv.appendChild(contentDiv);
+
+        // Füge Nachricht zum Container hinzu
+        UI.messagesContainer.appendChild(msgDiv);
+
+        // Auto-Scroll
+        const isScrolledToBottom = UI.messagesContainer.scrollHeight - UI.messagesContainer.clientHeight <= UI.messagesContainer.scrollTop + 20;
+        if (isMe || isScrolledToBottom) {
+            UI.messagesContainer.scrollTop = UI.messagesContainer.scrollHeight;
+        }
+    }
+
+    function sendTyping(isTyping = true) {
+        if (!socket || !state.connected || UI.messageInput.disabled) {
+             return;
+        }
+
+        clearTimeout(state.typingTimeout);
+
+        socket.emit('typing', { isTyping });
+
+        if (isTyping) {
+            state.typingTimeout = setTimeout(() => {
+                socket.emit('typing', { isTyping: false });
+            }, CONFIG.TYPING_TIMER_LENGTH);
+        }
+    }
+
+    // --- WebRTC Logic (Multi-Peer Audio) ---
+    async function setupLocalAudioStream() {
+        console.log("[WebRTC] setupLocalAudioStream aufgerufen.");
+        if (state.localAudioStream) {
+            console.log("[WebRTC] Beende alten lokalen Audio-Stream.");
+            state.localAudioStream.getTracks().forEach(track => track.stop());
+            state.localAudioStream = null;
         }
 
         try {
-             const stream = await navigator.mediaDevices.getDisplayMedia({
-                 video: { cursor: "always", frameRate: { ideal: 10, max: 15 } },
-                 audio: true
-             });
-             state.screenStream = stream;
-             state.isSharingScreen = true;
-             console.log(`[WebRTC] Bildschirmstream erhalten: ${stream.id}. Tracks: Video: ${stream.getVideoTracks().length}, Audio: ${stream.getAudioTracks().length}`);
+            const selectedMicId = UI.micSelect ? UI.micSelect.value : undefined;
+            const audioConstraints = {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                deviceId: selectedMicId ? { exact: selectedMicId } : undefined
+            };
+            console.log("[WebRTC] Versuche, lokalen Audio-Stream zu holen mit Constraints:", audioConstraints);
 
-             const screenAudioTrack = stream.getAudioTracks()[0];
-             if (screenAudioTrack && state.localAudioStream) {
-                  console.log("[WebRTC] Bildschirmstream hat Audio. Stoppe lokalen Mikrofonstream.");
-                 stopLocalAudioStream();
-             } else {
-                  console.log("[WebRTC] Bildschirmstream hat kein Audio oder Mikrofon war nicht aktiv. Mikrofon bleibt/ist inaktiv.");
-             }
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: false,
+                audio: audioConstraints
+            });
+            state.localAudioStream = stream;
+            console.log(`[WebRTC] Lokaler Audio-Stream erhalten: ${stream.id}. Tracks: Audio: ${stream.getAudioTracks().length}`);
 
-             state.peerConnections.forEach(pc => {
-                  addLocalStreamTracksToPeerConnection(pc, state.screenStream);
-             });
+            state.peerConnections.forEach(pc => {
+                addLocalStreamToPeerConnection(pc);
+            });
 
-             const screenVideoTrack = stream.getVideoTracks()[0];
-             if (screenVideoTrack) {
-                 screenVideoTrack.onended = () => {
-                     console.log("[WebRTC] Bildschirmteilung beendet durch Browser UI.");
-                     if (state.isSharingScreen) {
-                         toggleScreenSharing();
-                     }
-                 };
-                  console.log("[WebRTC] onended Listener für Screen Video Track hinzugefügt.");
-             } else {
-                  console.warn("[WebRTC] Kein Screen Video Track gefunden, onended Listener konnte nicht hinzugefügt werden.");
-             }
+             updateLocalMuteButtonUI();
 
-             socket.emit('screenShareStatus', { sharing: true });
-             console.log("[Socket.IO] Sende 'screenShareStatus: true'.");
-
-             updateShareScreenButtonUI();
-
-             return true;
+            return true;
         } catch (err) {
-             console.error('[WebRTC] Fehler beim Starten der Bildschirmteilung:', err.name, err.message);
-             let errorMessage = `Bildschirmfreigabe fehlgeschlagen: ${err.message}.`;
-             if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                  errorMessage = "Bildschirmfreigabe verweigert. Bitte erlaube den Zugriff in den Browser-Einstellungen.";
-             } else if (err.name === 'AbortError') {
-                  errorMessage = "Bildschirmfreigabe abgebrochen.";
-             }
-             displayError(errorMessage);
+            console.error('[WebRTC] Fehler beim Zugriff auf das Mikrofon:', err.name, err.message);
+             displayError(`Mikrofonzugriff fehlgeschlagen: ${err.message}. Bitte erlaube den Zugriff.`);
+             if (UI.micSelect) UI.micSelect.disabled = true;
+             const localMuteBtn = document.getElementById('localMuteBtn');
+             if(localMuteBtn) localMuteBtn.disabled = true;
 
-             state.screenStream = null;
-             state.isSharingScreen = false;
-             setupLocalAudioStream();
-
-             updateShareScreenButtonUI();
-
-             socket.emit('screenShareStatus', { sharing: false });
-
-             return false;
+            return false;
         }
     }
 
-    // Stoppt die Bildschirmteilung
-    function stopScreenSharing(sendSignal = true) {
-         console.log(`[WebRTC] stopScreenSharing aufgerufen. sendSignal: ${sendSignal}.`);
-         if (!state.isSharingScreen) {
-             console.warn("[WebRTC] stopScreenSharing: Bildschirm wird nicht geteilt.");
-             return;
-         }
-
-         if (state.screenStream) {
-             console.log(`[WebRTC] Stoppe Tracks im Bildschirmstream (${state.screenStream.id}).`);
-             state.screenStream.getTracks().forEach(track => {
-                  console.log(`[WebRTC] Stoppe Screen Track <span class="math-inline">\{track\.id\} \(</span>{track.kind}).`);
-                  track.stop();
-             });
-             state.screenStream = null;
-             console.log("[WebRTC] screenStream ist jetzt null.");
-         } else {
-              console.log("[WebRTC] stopScreenSharing: screenStream war bereits null.");
-         }
-
-         state.isSharingScreen = false;
-         console.log("[WebRTC] isSharingScreen ist jetzt false.");
-
-         setupLocalAudioStream();
-
-         if (sendSignal && socket && state.connected) {
-             socket.emit('screenShareStatus', { sharing: false });
-             console.log("[Socket.IO] Sende 'screenShareStatus: false'.");
-         }
-
-          updateShareScreenButtonUI();
-    }
-
-    // Umschalten der Bildschirmteilung
-    async function toggleScreenSharing() {
-        console.log(`[WebRTC] toggleScreenSharing aufgerufen. Aktueller State isSharingScreen: ${state.isSharingScreen}`);
-        if (!state.connected || !UI.shareScreenBtn) {
-             console.warn("[WebRTC] Nicht verbunden oder Button nicht gefunden.");
-             return;
-        }
-
-        UI.shareScreenBtn.disabled = true;
-
-        if (state.isSharingScreen) {
-            stopScreenSharing(true);
+    function stopLocalAudioStream() {
+         console.log("[WebRTC] stopLocalAudioStream aufgerufen.");
+        if (state.localAudioStream) {
+            console.log(`[WebRTC] Stoppe Tracks im lokalen Audio-Stream (${state.localAudioStream.id}).`);
+            state.localAudioStream.getTracks().forEach(track => {
+                 console.log(`[WebRTC] Stoppe lokalen Track ${track.id} (${track.kind}).`);
+                 track.stop();
+            });
+            state.localAudioStream = null;
+             console.log("[WebRTC] localAudioStream ist jetzt null.");
         } else {
-            await startScreenSharing();
+             console.log("[WebRTC] Kein lokaler Audio-Stream zum Stoppen.");
         }
-
-        UI.shareScreenBtn.disabled = false;
-    }
-
-     // Aktualisiert die UI des Bildschirm teilen Buttons
-     function updateShareScreenButtonUI() {
-         if (UI.shareScreenBtn) {
-             UI.shareScreenBtn.textContent = state.isSharingScreen ? 'Teilen beenden' : '🖥 Bildschirm teilen';
-             UI.shareScreenBtn.classList.toggle('active', state.isSharingScreen);
+         const localMuteBtn = document.getElementById('localMuteBtn');
+         if(localMuteBtn) {
+              localMuteBtn.removeEventListener('click', toggleLocalAudioMute);
+              localMuteBtn.classList.add('hidden');
          }
-     }
+         state.localAudioMuted = false;
+    }
 
     async function createPeerConnection(peerId) {
         console.log(`[WebRTC] createPeerConnection aufgerufen für Peer: ${peerId}.`);
         if (state.peerConnections.has(peerId)) {
-            console.warn(`[WebRTC] PeerConnection mit ${peerId} existiert bereits.`);
+            console.warn(`[WebRTC] PeerConnection mit ${peerId} existiert bereits. Gebe vorhandene zurück.`);
             return state.peerConnections.get(peerId);
         }
 
@@ -783,8 +811,266 @@ document.addEventListener('DOMContentLoaded', () => {
 
         pc.ontrack = event => {
             console.log(`[WebRTC] Empfange remote track von Peer ${peerId}. Track Kind: ${event.track.kind}, Stream ID(s): ${event.streams ? event.streams.map(s => s.id).join(', ') : 'No Stream'}`);
+            if (event.track.kind === 'audio') {
+                 const audioElement = ensureRemoteAudioElementExists(peerId);
 
-             let remoteStream = state.remoteStreams.get(peerId);
-             if (!remoteStream) {
-                 remoteStream = new MediaStream();
-                 state.remoteStreams.set(
+                 if (event.streams && event.streams[0]) {
+                     console.log(`[WebRTC] Verbinde Remote Audio Stream ${event.streams[0].id} mit Audio-Element für Peer ${peerId}.`);
+                     audioElement.srcObject = event.streams[0];
+                 } else {
+                      console.log(`[WebRTC] Verbinde einzelnen Remote Audio Track ${event.track.id} mit Audio-Element für Peer ${peerId}.`);
+                     const remoteStream = new MediaStream([event.track]);
+                      audioElement.srcObject = remoteStream;
+                 }
+
+                 event.track.onended = () => {
+                     console.log(`[WebRTC] Remote Audio Track ${event.track.id} von Peer ${peerId} beendet.`);
+                 };
+                  event.track.onmute = () => console.log(`[WebRTC] Remote Audio Track ${event.track.id} von Peer ${peerId} gemutet.`);
+                  event.track.ounmute = () => console.log(`[WebRTC] Remote Audio Track ${event.track.id} von Peer ${peerId} entmutet.`);
+            }
+        };
+
+        pc.oniceconnectionstatechange = () => {
+             if (!pc) return;
+            const pcState = pc.iceConnectionState;
+             const peerUser = state.allUsersList.find(u => u.id === peerId);
+             const peerUsername = peerUser ? peerUser.username : peerId;
+            console.log(`[WebRTC] ICE Connection Status zu Peer '${peerUsername}' (${peerId}) geändert zu: ${pcState}`);
+             switch (pcState) {
+                case "new": case "checking":
+                    break;
+                case "connected":
+                    console.log(`[WebRTC] ICE 'connected': Erfolgreich verbunden mit Peer '${peerUsername}'. Audio sollte fließen.`);
+                    break;
+                case "completed":
+                    console.log(`[WebRTC] ICE 'completed': Alle Kandidaten für Peer '${peerUsername}' geprüft.`);
+                    break;
+                case "disconnected":
+                    console.warn(`[WebRTC] ICE 'disconnected': Verbindung zu Peer '${peerUsername}' unterbrochen. Versuche erneut...`);
+                    break;
+                case "failed":
+                    console.error(`[WebRTC] ICE 'failed': Verbindung zu Peer '${peerUsername}' fehlgeschlagen.`);
+                     closePeerConnection(peerId);
+                    break;
+                case "closed":
+                    console.log(`[WebRTC] ICE 'closed': Verbindung zu Peer '${peerUsername}' wurde geschlossen.`);
+                     closePeerConnection(peerId);
+                    break;
+            }
+        };
+
+        pc.onsignalingstatechange = () => {
+            if (!pc) return;
+            const pcState = pc.signalingState;
+             const peerUser = state.allUsersList.find(u => u.id === peerId);
+             const peerUsername = peerUser ? peerUser.username : peerId;
+            console.log(`[WebRTC] Signaling State zu Peer '${peerUsername}' (${peerId}) geändert zu: ${pcState}`);
+        };
+
+        pc.onnegotiationneeded = async () => {
+             console.log(`[WebRTC] onnegotiationneeded Event für Peer ${peerId} ausgelöst.`);
+             const isPolite = state.socketId < peerId;
+
+             if (pc.signalingState !== 'stable' && isPolite) {
+                 console.log(`[WebRTC] Peer ${peerId}: Bin Polite (${isPolite}). Signaling State ist nicht 'stable' (${pc.signalingState}). Überspringe Offer Erstellung.`);
+                 return;
+             }
+
+             if (pc.signalingState === 'have-local-offer' && isPolite) {
+                  console.log(`[WebRTC] Peer ${peerId}: Glare Situation (have-local-offer, Polite). Warte auf eingehendes Offer (Rollback).`);
+                   return;
+             }
+
+             console.log(`[WebRTC] Peer ${peerId}: Erstelle Offer. Signaling State: ${pc.signalingState}. Bin Polite? ${isPolite}.`);
+             try {
+                 const offer = await pc.createOffer();
+                 console.log(`[WebRTC] Peer ${peerId}: Offer erstellt. Setze Local Description.`);
+                 await pc.setLocalDescription(offer);
+                 console.log(`[WebRTC] Peer ${peerId}: Local Description (Offer) gesetzt. Sende Offer an Server.`);
+
+                 socket.emit('webRTC-signal', {
+                     to: peerId,
+                     type: 'offer',
+                     payload: pc.localDescription
+                 });
+
+             } catch (err) {
+                 console.error(`[WebRTC] Peer ${peerId}: Fehler bei Offer Erstellung oder Setzung:`, err);
+                 displayError(`Fehler bei Audio-Verhandlung (Offer) mit Peer ${peerId}.`);
+                 closePeerConnection(peerId);
+             }
+        };
+
+        console.log(`[WebRTC] PeerConnection Objekt für Peer ${peerId} erstellt.`);
+        return pc;
+    }
+
+    function addLocalStreamToPeerConnection(pc) {
+        if (!state.localAudioStream || !pc) {
+            console.warn("[WebRTC] addLocalStreamToPeerConnection: Lokaler Stream oder PC ist null.");
+            return;
+        }
+         console.log(`[WebRTC] Füge lokalen Audio-Stream Tracks zu PeerConnection hinzu.`);
+
+         pc.getSenders().forEach(sender => {
+             if (sender.track && sender.track.kind === 'audio') {
+                 pc.removeTrack(sender);
+             }
+         });
+
+        state.localAudioStream.getAudioTracks().forEach(track => {
+             console.log(`[WebRTC] Füge lokalen Audio Track ${track.id} hinzu (Enabled: ${track.enabled}).`);
+            pc.addTrack(track, state.localAudioStream);
+        });
+         console.log("[WebRTC] Lokale Audio-Tracks zur PC hinzugefügt.");
+    }
+
+    function updatePeerConnections(currentRemoteUsers) {
+        console.log(`[WebRTC] updatePeerConnections aufgerufen. Aktuelle Remote User: ${currentRemoteUsers.length}. Bestehende PCs: ${state.peerConnections.size}`);
+
+        state.peerConnections.forEach((pc, peerId) => {
+            const peerStillExists = currentRemoteUsers.some(user => user.id === peerId);
+            if (!peerStillExists) {
+                console.log(`[WebRTC] Peer ${peerId} nicht mehr in Userliste. Schließe PeerConnection.`);
+                closePeerConnection(peerId);
+            }
+        });
+
+        currentRemoteUsers.forEach(async user => {
+            if (!state.peerConnections.has(user.id)) {
+                console.log(`[WebRTC] Neuer Peer ${user.username} (${user.id}) gefunden. Erstelle PeerConnection.`);
+                const pc = await createPeerConnection(user.id);
+                 addLocalStreamToPeerConnection(pc);
+
+                 const shouldInitiateOffer = state.socketId < user.id;
+
+                 if (shouldInitiateOffer) {
+                      console.log(`[WebRTC] Bin Initiator für Peer ${user.id}. Erstelle initiales Offer.`);
+                 } else {
+                     console.log(`[WebRTC] Bin Receiver für Peer ${user.id}. Warte auf Offer.`);
+                 }
+            } else {
+                 const pc = state.peerConnections.get(user.id);
+                 addLocalStreamToPeerConnection(pc);
+            }
+        });
+    }
+
+    function closePeerConnection(peerId) {
+        console.log(`[WebRTC] closePeerConnection aufgerufen für Peer: ${peerId}.`);
+        const pc = state.peerConnections.get(peerId);
+
+        if (pc) {
+            console.log(`[WebRTC] Schließe PeerConnection mit ${peerId}.`);
+             pc.getSenders().forEach(sender => {
+                 if (sender.track) {
+                     pc.removeTrack(sender);
+                 }
+             });
+
+            pc.close();
+            state.peerConnections.delete(peerId);
+             console.log(`[WebRTC] PeerConnection mit ${peerId} gelöscht.`);
+        } else {
+             console.log(`[WebRTC] Keine PeerConnection mit ${peerId} zum Schließen gefunden.`);
+        }
+
+         removeRemoteAudioElement(peerId);
+    }
+
+    function closeAllPeerConnections() {
+        console.log("[WebRTC] closeAllPeerConnections aufgerufen.");
+        state.peerConnections.forEach((pc, peerId) => {
+            closePeerConnection(peerId);
+        });
+         state.peerConnections.clear();
+         console.log("[WebRTC] Alle PeerConnections geschlossen.");
+    }
+
+    // --- Chat Logic ---
+    function sendMessage() {
+        console.log("sendMessage() aufgerufen.");
+        const content = UI.messageInput.value.trim();
+        if (!content) {
+            console.log("sendMessage: Inhalt leer. Abbruch.");
+            return;
+        }
+
+        if (!socket || !state.connected) {
+            console.error("[Chat Send Error] Cannot send message. Not connected.");
+            displayError("Nicht verbunden. Nachricht kann nicht gesendet werden.");
+            return;
+        }
+
+        const message = {
+             content,
+             timestamp: new Date().toISOString(), // Zeitstempel weiterhin senden, auch wenn nicht angezeigt
+             type: 'text'
+        };
+
+        console.log(`sendMessage: Sende Textnachricht: "${message.content.substring(0, Math.min(message.content.length, 50))}..."`);
+        socket.emit('message', message);
+
+
+        UI.messageInput.value = '';
+        UI.messageInput.style.height = 'auto';
+        UI.messageInput.focus();
+        sendTyping(false);
+    }
+
+    // Fügt eine eingehende (oder eigene gesendete) Nachricht zum Chat hinzu
+    function appendMessage(msg) {
+         if (!msg || !msg.content || !msg.id || !msg.username) {
+            console.warn("appendMessage: Ungültige Nachrichtendaten erhalten.", msg);
+            return;
+        }
+
+        const msgDiv = document.createElement('div');
+        msgDiv.classList.add('message');
+        const isMe = msg.id === state.socketId;
+        if (isMe) msgDiv.classList.add('me');
+
+        const nameSpan = document.createElement('span');
+        nameSpan.classList.add('name');
+        nameSpan.textContent = escapeHTML(msg.username);
+        nameSpan.style.color = escapeHTML(msg.color || getUserColor(msg.id));
+
+        const contentDiv = document.createElement('div');
+        contentDiv.classList.add('content');
+        contentDiv.textContent = escapeHTML(msg.content);
+
+        // Zeitstempel-Logik entfernt
+
+
+        msgDiv.appendChild(nameSpan);
+        msgDiv.appendChild(contentDiv);
+
+        UI.messagesContainer.appendChild(msgDiv);
+
+        const isScrolledToBottom = UI.messagesContainer.scrollHeight - UI.messagesContainer.clientHeight <= UI.messagesContainer.scrollTop + 20;
+        if (isMe || isScrolledToBottom) {
+            UI.messagesContainer.scrollTop = UI.messagesContainer.scrollHeight;
+        }
+    }
+
+    function sendTyping(isTyping = true) {
+        if (!socket || !state.connected || UI.messageInput.disabled) {
+             return;
+        }
+
+        clearTimeout(state.typingTimeout);
+
+        socket.emit('typing', { isTyping });
+
+        if (isTyping) {
+            state.typingTimeout = setTimeout(() => {
+                socket.emit('typing', { isTyping: false });
+            }, CONFIG.TYPING_TIMER_LENGTH);
+        }
+    }
+
+    // --- Init ---
+    initializeUI();
+
+});
