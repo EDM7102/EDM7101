@@ -1,108 +1,32 @@
-/* Allgemeine Farbvariablen beibehalten */
+/* ... (vorherige Stile) ... */
+
+/* Farben für Audio-Steuerung */
 :root {
-    --primary-bg: #1a1a1a;
-    --secondary-bg: #242424;
-    --content-area-bg: #2a2a2a;
-    --content-element-bg: #333333;
-
-    --text-color: #e0e0e0;
-    --text-secondary-color: #a0a0a0;
-    --text-muted-color: #808080;
-    --text-on-accent-bg: #ffffff;
-
-    --border-color: #3d3d3d;
-    --divider-color: #444;
-
-    --accent-highlight-color: #c0c0c0;
-    --link-color: #82aaff;
-
-    --button-bg: #4a4a4a;
-    --button-hover-bg: #5a5a5a;
-    --button-text-color: var(--text-color);
-
-    --button-primary-bg: #5c5c5c;
-    --button-primary-hover-bg: #6c6c6c;
-
-    --message-bg-me: #454545;
-    --message-text-me: var(--text-color);
-    --message-bg-other: var(--content-element-bg);
-    --message-text-other: var(--text-color);
-
-    --error-bg: #d32f2f;
-    --error-text-color: var(--text-on-accent-bg);
-    --success-bg: #388e3c;
-    --success-text-color: var(--text-on-accent-bg);
-
-    /* Farben für Audio-Steuerung */
     --audio-active-color: #4caf50;
-    --audio-muted-color: #f44336;
+    --audio-muted-color: #f44336; /* Standard Mute Rot */
     --audio-button-bg: var(--button-bg);
     --audio-button-hover-bg: var(--button-hover-bg);
-    --audio-button-muted-bg: var(--audio-muted-color);
-    --audio-button-muted-hover-bg: #c62828;
+    --audio-button-muted-bg: var(--error-bg); /* Stärkeres Rot für Mute Button */
+    --audio-button-muted-hover-bg: #a92424; /* Dunkleres Rot für Hover auf Mute */
+
+    /* Farben für Bildschirmteilen */
+    --share-screen-bg: #1e88e5; /* Blau für Teilen-Button */
+    --share-screen-hover-bg: #1565c0; /* Dunkleres Blau */
+    --share-screen-active-bg: #e53935; /* Rot für "Teilen beenden" */
+    --share-screen-active-hover-bg: #c62828; /* Dunkleres Rot */
+
+    --view-screen-btn-bg: var(--share-screen-bg); /* Farbe für "Ansehen" Button */
+    --view-screen-btn-hover-bg: var(--share-screen-hover-bg);
+    --stop-viewing-btn-bg: var(--share-screen-active-bg); /* Farbe für "Anzeige stoppen" Button */
+    --stop-viewing-btn-hover-bg: var(--share-screen-active-hover-bg);
+
+    --sharing-indicator-color: var(--share-screen-bg); /* Farbe für das Teilen-Symbol */
 }
 
-body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    margin: 0;
-    background-color: var(--primary-bg);
-    color: var(--text-color);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    font-size: 15px;
-    line-height: 1.6;
-}
 
-.app-container {
-    width: 98%;
-    max-width: 1600px;
-    height: 95vh;
-    max-height: 1000px;
-    background-color: var(--secondary-bg);
-    border-radius: 12px;
-    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    border: 1px solid var(--border-color);
-}
+/* ... (Stile für body, app-container, header, status-indicator, main-content) ... */
 
-.app-header {
-    background-color: var(--secondary-bg);
-    padding: 12px 25px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid var(--divider-color);
-    flex-shrink: 0;
-}
-
-.app-header h1 {
-    margin: 0;
-    font-size: 1.6em;
-    color: var(--accent-highlight-color);
-    font-weight: 600;
-}
-
-.status-indicator {
-    padding: 6px 12px;
-    border-radius: 5px;
-    font-size: 0.95em;
-    font-weight: bold;
-    flex-shrink: 0;
-}
-.status-indicator.connected { background-color: var(--success-bg); color: var(--success-text-color); }
-.status-indicator.disconnected { background-color: var(--error-bg); color: var(--error-text-color); }
-.status-indicator.connecting { background-color: #f39c12; color: white; }
-
-.main-content {
-    display: flex;
-    flex-grow: 1;
-    overflow: hidden;
-}
-
+/* Sidebar Styling */
 .sidebar {
     width: 300px;
     min-width: 250px;
@@ -206,14 +130,15 @@ body {
     background-color: var(--audio-button-hover-bg);
 }
 .remote-audio-item button.mute-btn.muted {
-     background-color: var(--audio-button-muted-bg);
+     background-color: var(--audio-muted-color);
      color: var(--text-on-accent-bg);
 }
 .remote-audio-item button.mute-btn.muted:hover {
-     background-color: var(--audio-button-muted-hover-bg);
+     background-color: #c62828;
 }
 
-/* Lokaler Mute Button Styling (wie Remote, aber volle Breite) */
+
+/* Lokaler Mute Button Styling */
 #localMuteBtn.mute-btn {
     display: block;
     width: 100%;
@@ -230,11 +155,27 @@ body {
     background-color: var(--audio-button-hover-bg);
 }
 #localMuteBtn.mute-btn.muted {
-     background-color: var(--audio-button-muted-bg);
+     background-color: var(--audio-button-muted-bg); /* Stärkeres Rot */
      color: var(--text-on-accent-bg);
 }
 #localMuteBtn.mute-btn.muted:hover {
-     background-color: var(--audio-button-muted-hover-bg);
+     background-color: var(--audio-button-muted-hover-bg); /* Dunkleres Rot */
+}
+
+/* Bildschirm teilen Button Styling (Sender) */
+#shareScreenBtn {
+    background-color: var(--share-screen-bg); /* Blau */
+    color: var(--text-on-accent-bg);
+}
+#shareScreenBtn:hover {
+    background-color: var(--share-screen-hover-bg); /* Dunkleres Blau */
+}
+/* Bildschirm teilen Button - Active State ("Teilen beenden") */
+#shareScreenBtn.active {
+    background-color: var(--share-screen-active-bg); /* Rot */
+}
+#shareScreenBtn.active:hover {
+     background-color: var(--share-screen-active-hover-bg); /* Dunkleres Rot */
 }
 
 
@@ -253,9 +194,15 @@ body {
     text-align: center;
     font-weight: 500;
 }
-.connection-controls button:last-child,
+.connection-controls button:last-child:not(#disconnectBtn),
 .audio-controls-section button:last-child {
      margin-bottom: 0;
+}
+.connection-controls button:last-child {
+    margin-bottom: 0;
+}
+#disconnectBtn.danger-btn {
+     margin-top: 10px;
 }
 
 
@@ -275,7 +222,8 @@ body {
 .connection-controls select:disabled,
 .message-input-area button:disabled,
 #localMuteBtn.mute-btn:disabled,
-.remote-audio-item button.mute-btn:disabled {
+.remote-audio-item button.mute-btn:disabled,
+#shareScreenBtn:disabled {
     background-color: #383838;
     color: var(--text-muted-color);
     cursor: not-allowed;
@@ -301,18 +249,60 @@ body {
     align-items: center;
     word-break: break-all;
     color: var(--text-secondary-color);
+    flex-wrap: wrap; /* Erlaube Umbruch, wenn Name + Button nicht passen */
+    gap: 8px; /* Abstand zwischen Elementen in der Liste */
 }
 #userList li .user-dot {
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    margin-right: 10px;
+    margin-right: 2px; /* Abstand reduziert, da Gap im Flexbox */
     background-color: var(--success-bg);
     flex-shrink: 0;
 }
 #userList li strong {
     color: var(--text-color);
     font-weight: 600;
+    flex-grow: 1; /* Eigener Name nimmt Platz ein */
+}
+/* Styling für den Teilen-Indikator (Icon oder Text) neben dem Namen */
+#userList li .sharing-indicator {
+     font-size: 0.9em;
+     color: var(--sharing-indicator-color); /* Blaue Farbe */
+     margin-left: 5px;
+     flex-shrink: 0;
+}
+
+/* Styling für den "Bildschirm ansehen" Button in der Benutzerliste */
+#userList li .view-screen-button {
+    padding: 4px 8px; /* Kleineres Padding */
+    font-size: 0.8em; /* Kleinere Schrift */
+    width: auto; /* Passt sich Inhalt an */
+    margin-bottom: 0;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    flex-shrink: 0;
+}
+#userList li .view-screen-button.view { /* Stil für "Ansehen" */
+    background-color: var(--view-screen-btn-bg); /* Blau */
+    color: var(--text-on-accent-bg);
+}
+#userList li .view-screen-button.view:hover {
+    background-color: var(--view-screen-btn-hover-bg); /* Dunkleres Blau */
+}
+#userList li .view-screen-button.stop { /* Stil für "Anzeige stoppen" */
+     background-color: var(--stop-viewing-btn-bg); /* Rot */
+     color: var(--text-on-accent-bg);
+}
+#userList li .view-screen-button.stop:hover {
+     background-color: var(--stop-viewing-btn-hover-bg); /* Dunkleres Rot */
+}
+#userList li .view-screen-button:disabled {
+     background-color: #383838;
+     color: var(--text-muted-color);
+     cursor: not-allowed;
+     opacity: 0.6;
 }
 
 
@@ -324,6 +314,71 @@ body {
     background-color: var(--content-area-bg);
     padding: 0px;
 }
+
+/* Remote Screen Container Styling */
+.remote-screen-container {
+    background-color: black;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--divider-color);
+    position: relative;
+    padding: 10px;
+    /* display: none; wird per JS umgeschaltet mit .hidden */
+}
+.remote-screen-container .screen-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px 8px 10px;
+    border-bottom: 1px solid #333;
+    margin-bottom: 10px;
+}
+.remote-screen-container .screen-header h3 {
+    margin: 0;
+    font-size: 1em;
+    color: var(--text-secondary-color);
+    font-weight: 500;
+}
+#remoteScreenSharerName {
+    color: var(--accent-highlight-color);
+}
+
+.remote-screen-container .screen-video-box {
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+    background-color: #111;
+}
+
+#remoteScreenVideo {
+    display: block;
+    max-width: 100%;
+    max-height: 400px; /* Maximale Höhe im nicht-Vollbild Modus */
+    height: auto;
+    border-radius: 8px;
+}
+
+.remote-screen-container .fullscreen-btn {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    padding: 8px 15px;
+    font-size: 0.9em;
+    background-color: rgba(40,40,40,0.8);
+    color: var(--text-color);
+    border: 1px solid rgba(180,180,180,0.5);
+    border-radius: 4px;
+    cursor: pointer;
+    z-index: 10;
+    transition: background-color 0.2s ease;
+}
+.remote-screen-container .fullscreen-btn:hover {
+     background-color: rgba(60,60,60,0.9);
+}
+
 
 .messages-container {
     flex-grow: 1;
@@ -354,7 +409,6 @@ body {
     border-radius: 18px;
     max-width: 80%;
     word-wrap: break-word;
-    /* position: relative; Zeitstempel entfernt, daher Position relative nicht mehr zwingend nötig */
     filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2));
 }
 .message .name {
@@ -379,8 +433,6 @@ body {
     margin-left: 8px;
 }
 
-/* .message .timestamp stiles entfernt */
-
 
 .typing-indicator {
     padding: 10px 20px;
@@ -399,7 +451,7 @@ body {
     padding: 12px 20px;
     background-color: var(--secondary-bg);
     border-top: 1px solid var(--divider-color);
-    align-items: flex-end;
+    align-items: center; /* Vertikale Ausrichtung jetzt zentriert */
     gap: 10px;
     flex-shrink: 0;
 }
@@ -415,6 +467,8 @@ body {
     max-height: 120px;
     font-size: 1em;
     line-height: 1.5;
+     align-self: center; /* Stellt sicher, dass Textarea zentriert ist */
+     /* align-self: stretch; kann bei Bedarf wieder aktiviert werden, wenn vertikale Füllung gewünscht ist */
 }
 #messageInput::placeholder {
     color: var(--text-muted-color);
@@ -424,11 +478,12 @@ body {
     opacity: 0.7;
 }
 
-.message-input-area #sendBtn {
+#sendBtn {
     margin-left: 0;
     border-radius: 24px;
     padding: 12px 25px;
     min-width: 80px;
+     align-self: center; /* Stellt sicher, dass Button zentriert ist */
 }
 
 
@@ -446,7 +501,13 @@ body {
     display: none !important;
 }
 
-/* Responsive Anpassungen */
+/* Responsivität für Bildschirm teilen Bereich */
+@media (max-width: 1024px) {
+    #remoteScreenVideo {
+        max-height: 300px;
+    }
+}
+
 @media (max-width: 768px) {
     body {
         font-size: 14px;
@@ -479,7 +540,8 @@ body {
      .connection-controls input[type="text"],
      .connection-controls select,
      .connection-controls button,
-     #localMuteBtn.mute-btn {
+     #localMuteBtn.mute-btn,
+     #shareScreenBtn {
          padding: 10px;
          margin-bottom: 8px;
          border-radius: 4px;
@@ -508,6 +570,28 @@ body {
          border-radius: 3px;
      }
 
+    /* Remote Screen Container Responsive */
+    .remote-screen-container {
+        padding: 8px;
+    }
+    .remote-screen-container .screen-header {
+        padding: 0 8px 6px 8px;
+        margin-bottom: 8px;
+    }
+     .remote-screen-container .screen-header h3 {
+         font-size: 0.9em;
+     }
+     #remoteScreenVideo {
+         max-height: 200px;
+     }
+    .remote-screen-container .fullscreen-btn {
+        bottom: 10px;
+        right: 10px;
+        padding: 6px 12px;
+        font-size: 0.8em;
+    }
+
+
     .messages-container {
         padding: 15px;
         gap: 10px;
@@ -526,7 +610,6 @@ body {
      .message:not(.me) {
           border-bottom-left-radius: 4px;
      }
-     /* .message .timestamp responsive stiles entfernt */
 
 
     .typing-indicator {
@@ -537,16 +620,20 @@ body {
     .message-input-area {
         padding: 10px 15px;
         gap: 8px;
+         align-items: center;
     }
     #messageInput {
         padding: 10px 12px;
         border-radius: 20px;
         max-height: 80px;
+         align-self: center;
     }
-     .message-input-area #sendBtn {
+     #sendBtn {
           padding: 10px 20px;
          border-radius: 20px;
+          align-self: center;
      }
+
 
     .error-message {
         padding: 10px;
