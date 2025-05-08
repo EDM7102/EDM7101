@@ -27,12 +27,9 @@ app.get('/', (req, res) => {
 
 // Middleware für die initiale Verbindung und Authentifizierung
 io.use((socket, next) => {
-    // Lese Daten aus socket.handshake.auth, die der Client beim io() call mitsendet
     const username = socket.handshake.auth.username;
     const roomId = socket.handshake.auth.roomId;
-    // const color = socket.handshake.auth.color; // Client sendet aktuell keine Farbe bei Auth
 
-    // Validierung
     if (!username || username.trim() === '') {
         console.error(`Verbindungsversuch ohne Benutzername von Socket ${socket.id}`);
         return next(new Error('Benutzername ist erforderlich'));
@@ -42,7 +39,6 @@ io.use((socket, next) => {
         return next(new Error('Raum-ID ist erforderlich'));
     }
 
-    // Optional: Prüfen, ob Benutzername bereits im Raum vergeben ist
     for (let user of connectedUsers.values()) {
         if (user.roomId === roomId && user.username === username) {
              console.warn(`Benutzername '${username}' in Raum '${roomId}' bereits vergeben.`);
@@ -50,20 +46,17 @@ io.use((socket, next) => {
         }
     }
 
-    // Speichere die validierten Daten am Socket-Objekt für späteren Zugriff
     socket.username = username;
     socket.roomId = roomId;
-    socket.userColor = getRandomColor(socket.id); // Weise eine Farbe zu
+    socket.userColor = getRandomColor(socket.id);
 
-    console.log(`Auth erfolgreich für: ${username} in Raum ${roomId}`);
-    next(); // Erlaube die Verbindung
+    console.log(`Auth erfolgreich für: ${username} in Raum ${roomId} (Socket ID: ${socket.id})`);
+    next();
 });
 
 io.on('connection', (socket) => {
-    // Die Daten (username, roomId, userColor) sind jetzt am socket-Objekt verfügbar
     console.log(`Benutzer '${socket.username}' (${socket.id}) verbunden mit Raum '${socket.roomId}'.`);
 
-    // Benutzer registrieren
     const newUser = {
         id: socket.id,
         username: socket.username,
@@ -72,51 +65,49 @@ io.on('connection', (socket) => {
     };
     connectedUsers.set(socket.id, newUser);
 
-    // Socket zum Socket.IO Raum hinzufügen
     socket.join(socket.roomId);
 
-    // Sende Liste der User *in diesem Raum* an den neuen User
     const usersInRoom = Array.from(connectedUsers.values()).filter(user => user.roomId === socket.roomId);
-    socket.emit('joinSuccess', { // Oder benutze 'userListUpdate', wenn der Client das erwartet
+    // Sende an den neu verbundenen Benutzer seine ID und die aktuelle Benutzerliste des Raumes
+    socket.emit('joinSuccess', { 
         id: socket.id,
         users: usersInRoom
     });
 
     // Informiere ALLE im Raum (auch den Neuen) über die aktualisierte Userliste
     io.to(socket.roomId).emit('userListUpdate', usersInRoom);
-
     console.log(`Benutzer '${socket.username}' registriert. Benutzer im Raum '${socket.roomId}': ${usersInRoom.length}`);
 
-    // Nachrichtenverarbeitung (nur an den spezifischen Raum senden)
+    // Nachrichtenverarbeitung
     socket.on('message', (msgData) => {
         const sender = connectedUsers.get(socket.id);
         if (sender) {
-            // Sende Nachricht an alle im Raum des Senders
-            io.to(sender.roomId).emit('message', {
-                ...msgData, // Client sendet { content, timestamp }
-                username: sender.username, // Server fügt hinzu
-                color: sender.color       // Server fügt hinzu
+            console.log(`Nachricht in Raum ${sender.roomId} von ${sender.username}: ${msgData.content}`);
+            io.to(sender.roomId).emit('message', { // Event-Name ist 'message'
+                ...msgData, 
+                username: sender.username,
+                color: sender.color
             });
-            // console.log(`Nachricht in Raum ${sender.roomId} von ${sender.username}`);
+        } else {
+            console.error(`Nachricht von unbekanntem Socket ${socket.id} empfangen.`);
         }
     });
 
-    // Dateiverarbeitung (nur an den spezifischen Raum senden)
+    // Dateiverarbeitung
     socket.on('file', (fileMsgData) => {
         const sender = connectedUsers.get(socket.id);
         if (sender && fileMsgData.file) {
-             // Sende Datei-Info an alle im Raum des Senders
+             console.log(`Datei in Raum ${sender.roomId} von ${sender.username}: ${fileMsgData.file.name}`);
              io.to(sender.roomId).emit('file', {
-                 ...fileMsgData, // Client sendet { content (optional), file: { name, type, size, dataUrl? } }
+                 ...fileMsgData,
                  username: sender.username,
                  color: sender.color,
                  timestamp: fileMsgData.timestamp || new Date().toISOString()
              });
-            // console.log(`Datei in Raum ${sender.roomId} von ${sender.username}: ${fileMsgData.file.name}`);
         }
     });
 
-    // Tipp-Indikator (nur an *andere* im Raum senden)
+    // Tipp-Indikator
     socket.on('typing', (data) => {
         const sender = connectedUsers.get(socket.id);
         if (sender) {
@@ -133,32 +124,34 @@ io.on('connection', (socket) => {
     socket.on('disconnect', (reason) => {
         const disconnectingUser = connectedUsers.get(socket.id);
         if (disconnectingUser) {
-            const formerRoomId = disconnectingUser.roomId; // Raum merken
+            const formerRoomId = disconnectingUser.roomId;
             console.log(`Benutzer '${disconnectingUser.username}' (${socket.id}) hat die Verbindung getrennt (Raum: ${formerRoomId}). Grund: ${reason}`);
             connectedUsers.delete(socket.id);
 
-            // Informiere verbleibende Benutzer *im selben Raum*
             const remainingUsersInRoom = Array.from(connectedUsers.values()).filter(user => user.roomId === formerRoomId);
-            io.to(formerRoomId).emit('userListUpdate', remainingUsersInRoom); // Nur an den Raum senden
-            console.log(`Benutzer im Raum '${formerRoomId}': ${remainingUsersInRoom.length}`);
+            io.to(formerRoomId).emit('userListUpdate', remainingUsersInRoom);
+            console.log(`Benutzerliste für Raum '${formerRoomId}' aktualisiert. Verbleibende Benutzer: ${remainingUsersInRoom.length}`);
         } else {
-            // console.log(`Unbekannter Benutzer (${socket.id}) hat die Verbindung getrennt. Grund: ${reason}`);
+            console.log(`Unbekannter Benutzer (${socket.id}) hat die Verbindung getrennt. Grund: ${reason}`);
         }
-        // Socket verlässt automatisch alle Räume bei disconnect
     });
 });
 
 // Hilfsfunktion für WebRTC Signalisierung
 function handleWebRTCSignal(socket, data, eventName) {
     const sender = connectedUsers.get(socket.id);
-    if (sender && data.to && data.to !== socket.id) {
-        // Sende nur an das spezifische Ziel ('to')
+    if (!sender) {
+        console.error(`${eventName} von einem nicht registrierten Socket ${socket.id} empfangen.`);
+        return;
+    }
+    if (data.to && data.to !== socket.id) {
+        console.log(`${eventName} von ${sender.username} (${socket.id}) an ${data.to}`);
         io.to(data.to).emit(eventName, {
-            ...data, // Beinhaltet sdp oder candidate oder answer
-            from: socket.id // Füge hinzu, wer sendet
+            ...data, 
+            from: socket.id 
          });
-    } else if(sender && !data.to) {
-         console.warn(`${eventName} von ${sender.username} ohne Ziel ('to') empfangen.`);
+    } else if (!data.to) {
+         console.warn(`${eventName} von ${sender.username} ohne Ziel ('to') empfangen. Data:`, data);
     }
 }
 
