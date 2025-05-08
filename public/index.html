@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EDMBook Sprach-Chat</title> <link rel="stylesheet" href="style.css">
-</head>
+    <title>EDMBook Sprach-Chat</title>
+    <link rel="stylesheet" href="style.css">
+    </head>
 <body>
     <div class="app-container">
         <header class="app-header">
-            <h1>EDMBook Sprach-Chat</h1> <div id="statusIndicator" class="status-indicator disconnected">Getrennt</div>
+            <h1>EDMBook Sprach-Chat</h1>
+            <div id="statusIndicator" class="status-indicator disconnected">Getrennt</div>
         </header>
 
         <div class="main-content">
@@ -22,13 +24,17 @@
                     <select id="micSelect" title="Mikrofon auswählen">
                         <option value="">Standard-Mikrofon</option>
                         </select>
-                    <div id="remoteAudioControls">
-                        </div>
 
+                    <button id="localMuteBtn" class="hidden mute-btn">Mikro stumm schalten</button>
 
                     <button id="connectBtn">Verbinden</button>
                     <button id="disconnectBtn" class="hidden danger-btn">Trennen</button>
                 </div>
+
+                <div id="remoteAudioControls" class="audio-controls-section hidden">
+                    <h3>Sprach-Teilnehmer</h3>
+                    </div>
+
 
                 <div class="user-list-container">
                     <h2>Benutzer Online (<span id="userCountPlaceholder">0</span>)</h2>
