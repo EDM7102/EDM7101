@@ -65,7 +65,82 @@
                     <input type="file" id="fileInput" accept="image/*,application/pdf,text/*,.zip,.rar,.doc,.docx,.xls,.xlsx,.ppt,.pptx" style="display:none;" disabled>
                     <label for="fileInput" id="fileUploadLabel" class="file-upload-label hidden" title="Datei senden (max 5MB)">📎</label>
                     <button id="sendBtn" disabled>Senden</button>
+                </footer><!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EDMBook Erweiterter Chat</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>EDMBook Erweiterter Chat</h1>
+            <div id="statusIndicator" class="status-indicator disconnected">Getrennt</div>
+        </header>
+
+        <div class="main-content">
+            <aside class="sidebar">
+                <div class="connection-controls">
+                    <h2>Verbindung</h2>
+                    <label for="usernameInput">Benutzername:</label>
+                    <input type="text" id="usernameInput" placeholder="Dein Name...">
+
+                    <label for="micSelect">Mikrofon:</label>
+                    <select id="micSelect" title="Mikrofon auswählen">
+                        <option value="">Standard-Mikrofon</option>
+                        </select>
+
+                    <button id="connectBtn">Verbinden</button>
+                    <button id="disconnectBtn" class="hidden danger-btn">Trennen</button>
+                    <button id="shareScreenBtn" class="hidden">Bildschirm teilen</button>
+                </div>
+
+                <div class="user-list-container">
+                    <h2>Benutzer Online (<span id="userCountPlaceholder">0</span>)</h2>
+                    <ul id="userList">
+                        </ul>
+                </div>
+            </aside>
+
+            <main class="chat-area">
+                <div id="errorMessage" class="error-message hidden"></div>
+
+                <div class="video-chat-area">
+                    <div class="video-box hidden" id="localVideoBox">
+                        <h3>Dein Bild/Ton</h3>
+                        <video id="localVideo" autoplay playsinline muted class="hidden"></video>
+                        <div id="localScreenStatus" class="screen-status-label offline">KAMERA AUS / FEHLER</div>
+                        <button id="localVideoFullscreenBtn" class="fullscreen-btn hidden">Vollbild</button>
+                    </div>
+                    <div class="video-box" id="remoteVideoBox">
+                        <h3>Remote Bild/Ton</h3>
+                        <video id="remoteVideo" autoplay playsinline class="hidden"></video>
+                        <div id="remoteScreenStatus" class="screen-status-label offline">KEIN VIDEO/SCREEN</div>
+                        <button id="remoteVideoFullscreenBtn" class="fullscreen-btn hidden">Vollbild</button>
+                    </div>
+                </div>
+
+                <div id="messagesContainer" class="messages-container">
+                    </div>
+
+                <div id="typingIndicator" class="typing-indicator" style="display: none;"></div>
+
+                <footer class="message-input-area">
+                    <textarea id="messageInput" placeholder="Nachricht eingeben..." rows="1" disabled></textarea>
+                    <input type="file" id="fileInput" accept="image/*,application/pdf,text/*,.zip,.rar,.doc,.docx,.xls,.xlsx,.ppt,.pptx" style="display:none;" disabled>
+                    <label for="fileInput" id="fileUploadLabel" class="file-upload-label hidden" title="Datei senden (max 5MB)">📎</label>
+                    <button id="sendBtn" disabled>Senden</button>
                 </footer>
+            </main>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
             </main>
         </div>
     </div>
