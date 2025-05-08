@@ -1225,12 +1225,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listener Zuweisungen (jetzt nach den Funktionsdefinitionen) ---
 
-    console.log("[App] Event Listener werden zugewiesen."); // Log, um zu sehen, ob dieser Abschnitt erreicht wird
-    if (UI.connectBtn) { // Prüfen, ob Button gefunden wurde
-        UI.connectBtn.addEventListener('click', connect);
-        console.log("[App] connectBtn Listener zugewiesen."); // Log, um zu sehen, ob Zuweisung erfolgt
+    console.log("[App] Event Listener werden zugewiesen.");
+    if (UI.connectBtn) {
+        UI.connectBtn.addEventListener('click', connect); // <-- HIER IST DIE ZEILE 1230 LAUT DEINEM LOG
+        console.log("[App] connectBtn Listener zugewiesen.");
     } else {
-         console.error("[App] connectBtn Element nicht gefunden!"); // Log, falls Button nicht gefunden wird
+         console.error("[App] connectBtn Element nicht gefunden!");
     }
 
 
