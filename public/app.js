@@ -110,6 +110,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 5000);
     }
 
+    function loadStateFromLocalStorage() {
+        try {
+            const storedState = localStorage.getItem('chatAppState');
+            if (storedState) {
+                state = { ...state, ...JSON.parse(storedState) };
+                if (state.username) {
+                    UI.usernameInput.value = state.username;
+                }
+            }
+        } catch (e) {
+            console.error("Fehler beim Laden des Zustands aus Local Storage:", e);
+            displayError("Fehler beim Laden gespeicherter Daten.");
+        }
+    }
+
     // initializeUI wird angepasst, um Event Listener zuzuweisen
     function initializeUI() {
         console.log("[UI] initializeUI aufgerufen. state.connected:", state.connected);
@@ -204,17 +219,248 @@ document.addEventListener('DOMContentLoaded', () => {
 
     } // Ende initializeUI Funktion
 
-    // ... (updateUIAfterConnect, updateUIAfterDisconnect, saveStateToLocalStorage,
-    //      loadStateFromLocalStorage, populateMicList, updateUserList,
-    //      updateTypingIndicatorDisplay, updateRemoteAudioControls,
-    //      updateRemoteScreenDisplay, ensureRemoteAudioElementExists, removeRemoteAudioElement,
-    //      toggleLocalAudioMute, updateLocalMuteButtonUI, toggleRemoteAudioMute,
-    //      setupLocalAudioStream, stopLocalAudioStream, startScreenSharing,
-    //      stopScreenSharing, toggleScreenSharing, updateShareScreenButtonUI,
-    //      createPeerConnection, addLocalStreamTracksToPeerConnection,
-    //      updatePeerConnections, closePeerConnection, closeAllPeerConnections,
-    //      sendMessage, appendMessage, sendTyping, handleViewScreenClick
-    //      Funktionen bleiben wie zuvor außerhalb von initializeUI definiert) ...
+    function updateUIAfterConnect() {
+        if (!UI.connectBtn || !UI.disconnectBtn || !UI.sendBtn || !UI.messageInput) return;
+        UI.connectBtn.classList.add('hidden');
+        UI.disconnectBtn.classList.remove('hidden');
+        UI.shareScreenBtn.classList.remove('hidden');
+        UI.sendBtn.disabled = false;
+        UI.messageInput.disabled = false;
+        setConnectionStatus('connected', 'Verbunden');
+        saveStateToLocalStorage();
+    }
+
+    function updateUIAfterDisconnect() {
+        if (!UI.connectBtn || !UI.disconnectBtn || !UI.sendBtn || !UI.messageInput) return;
+        UI.connectBtn.classList.remove('hidden');
+        UI.disconnectBtn.classList.add('hidden');
+        UI.shareScreenBtn.classList.add('hidden');
+        UI.sendBtn.disabled = true;
+        UI.messageInput.disabled = true;
+        setConnectionStatus('disconnected', 'Getrennt');
+        stopLocalAudioStream();
+        stopScreenSharing(false);
+        closeAllPeerConnections();
+    }
+
+    function saveStateToLocalStorage() {
+        try {
+            const stateToSave = { username: state.username };
+            localStorage.setItem('chatAppState', JSON.stringify(stateToSave));
+        } catch (e) {
+            console.error("Fehler beim Speichern des Zustands im Local Storage:", e);
+            displayError("Fehler beim Speichern von Daten.");
+        }
+    }
+
+    function populateMicList(devices) {
+        if (!UI.micSelect) return;
+        UI.micSelect.innerHTML = '<option value="">Standard-Mikrofon</option>';
+        devices.forEach(device => {
+            const option = document.createElement('option');
+            option.value = device.deviceId;
+            option.text = device.label || `Mikrofon ${UI.micSelect.options.length}`;
+            UI.micSelect.add(option);
+        });
+    }
+
+    function updateUserList(users) {
+        if (!UI.userList) return;
+        UI.userList.innerHTML = '';
+        if (users && users.length > 0) {
+            users.forEach(user => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <span class="user-dot" style="background-color: <span class="math-inline">\{user\.color \|\| getUserColor\(user\.id\)\}"\></span\>
+<strong\></span>{escapeHTML(user.username)}</strong>
+                    ${user.sharingStatus ? '<span class="sharing-indicator"> (teilt)</span>' : ''}
+                    ${user.id !== state.socketId && user.sharingStatus ? `<button class="view-screen-button view" data-peer-id="${user.id}">Bildschirm ansehen</button>` : ''}
+                `;
+                UI.userList.appendChild(li);
+            });
+            document.querySelectorAll('#userList li .view-screen-button').forEach(button => {
+                button.addEventListener('click', handleViewScreenClick);
+            });
+            document.getElementById('userCountPlaceholder').textContent = users.length.toString();
+        } else {
+            document.getElementById('userCountPlaceholder').textContent = '0';
+        }
+        state.allUsersList = users;
+        updatePeerConnections(users.filter(user => user.id !== state.socketId));
+    }
+
+    function updateTypingIndicatorDisplay() {
+        if (!UI.typingIndicator) return;
+        const typingUsernames = Array.from(state.typingUsers);
+        if (typingUsernames.length > 0) {
+            UI.typingIndicator.textContent = `${typingUsernames.map(name => escapeHTML(name)).join(', ')} schreibt gerade...`;
+            UI.typingIndicator.style.display = 'block';
+        } else {
+            UI.typingIndicator.style.display = 'none';
+        }
+    }
+
+    function updateRemoteAudioControls() {
+        if (!UI.remoteAudioControls) return;
+        UI.remoteAudioControls.classList.toggle('hidden', state.peerConnections.size === 0);
+        UI.remoteAudioControls.innerHTML = '<h3>Sprach-Teilnehmer</h3>';
+        state.peerConnections.forEach((pc, peerId) => {
+            const user = state.allUsersList.find(u => u.id === peerId);
+            if (!user) return;
+
+            const itemDiv = document.createElement('div');
+            itemDiv.classList.add('remote-audio-item');
+            itemDiv.innerHTML = `
+                <span style="color: <span class="math-inline">\{user\.color \|\| getUserColor\(peerId\)\}"\></span>{escapeHTML(user.username)}</span>
+                <button class="mute-btn" data-peer-id="${peerId}">Stumm</button>
+            `;
+            UI.remoteAudioControls.appendChild(itemDiv);
+        });
+        document.querySelectorAll('#remoteAudioControls .mute-btn').forEach(button => {
+            button.addEventListener('click', toggleRemoteAudioMute);
+        });
+        updateAllRemoteMuteButtons();
+    }
+
+    function updateRemoteScreenDisplay(peerId) {
+        if (!UI.remoteScreenContainer || !UI.remoteScreenVideo || !UI.remoteScreenSharerName) return;
+
+        if (peerId) {
+            const user = state.allUsersList.find(u => u.id === peerId);
+            if (user) {
+                UI.remoteScreenContainer.classList.remove('hidden');
+                UI.remoteScreenSharerName.textContent = escapeHTML(user.username);
+                const stream = state.remoteStreams.get(peerId);
+                if (stream) {
+                    UI.remoteScreenVideo.srcObject = stream;
+                } else {
+                    UI.remoteScreenVideo.srcObject = null;
+                }
+                state.currentlyViewingPeerId = peerId;
+            } else {
+                UI.remoteScreenContainer.classList.add('hidden');
+                UI.remoteScreenVideo.srcObject = null;
+                UI.remoteScreenSharerName.textContent = '';
+                state.currentlyViewingPeerId = null;
+            }
+        } else {
+            UI.remoteScreenContainer.classList.add('hidden');
+            UI.remoteScreenVideo.srcObject = null;
+            UI.remoteScreenSharerName.textContent = '';
+            state.currentlyViewingPeerId = null;
+        }
+        updateAllViewScreenButtons();
+    }
+
+    function ensureRemoteAudioElementExists(peerId) {
+        if (state.remoteAudioElements.has(peerId)) {
+            return state.remoteAudioElements.get(peerId);
+        }
+        const audioElement = new Audio();
+        audioElement.autoplay = true;
+        audioElement.controls = false;
+        state.remoteAudioElements.set(peerId, audioElement);
+        return audioElement;
+    }
+
+    function removeRemoteAudioElement(peerId) {
+        if (state.remoteAudioElements.has(peerId)) {
+            const audioElement = state.remoteAudioElements.get(peerId);
+            audioElement.pause();
+            audioElement.srcObject = null;
+            state.remoteAudioElements.delete(peerId);
+        }
+    }
+
+    function toggleLocalAudioMute() {
+        if (!state.localAudioStream) return;
+        state.localAudioMuted = !state.localAudioMuted;
+        state.localAudioStream.getTracks().forEach(track => {
+            if (track.kind === 'audio') {
+                track.enabled = !state.localAudioMuted;
+            }
+        });
+        updateLocalMuteButtonUI();
+    }
+
+    function updateLocalMuteButtonUI() {
+        if (!UI.localMuteBtn) return;
+        UI.localMuteBtn.textContent = state.localAudioMuted ? 'Mikrofon an' : 'Mikro stumm schalten';
+        UI.localMuteBtn.classList.toggle('muted', state.localAudioMuted);
+    }
+
+    function toggleRemoteAudioMute(event) {
+        const peerId = event.target.dataset.peerId;
+        if (!peerId || !state.remoteAudioElements.has(peerId)) return;
+
+        const audioElement = state.remoteAudioElements.get(peerId);
+        audioElement.muted = !audioElement.muted;
+        updateAllRemoteMuteButtons();
+    }
+
+    function updateAllRemoteMuteButtons() {
+        if (!UI.remoteAudioControls) return;
+        UI.remoteAudioControls.querySelectorAll('.mute-btn').forEach(button => {
+            const peerId = button.dataset.peerId;
+            if (state.remoteAudioElements.has(peerId)) {
+                button.textContent = state.remoteAudioElements.get(peerId).muted ? 'Ton an' : 'Stumm';
+                button.classList.toggle('muted', state.remoteAudioElements.get(peerId).muted);
+            }
+        });
+    }
+
+    async function setupLocalAudioStream() {
+        console.log("[WebRTC] setupLocalAudioStream aufgerufen.");
+        try {
+            const constraints = {
+                audio: {
+                    deviceId: UI.micSelect.value ? { exact: UI.micSelect.value } : undefined,
+                },
+                video: false,
+            };
+
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            console.log("[WebRTC] Lokalen Audio-Stream erhalten:", stream);
+            state.localAudioStream = stream;
+            updateLocalMuteButtonUI();
+            updateAllRemoteMuteButtons();
+            return stream;
+
+        } catch (error) {
+            console.error("[WebRTC] Fehler beim Abrufen des lokalen Audio-Streams:", error);
+            displayError("Zugriff auf Mikrofon verweigert oder kein Mikrofon gefunden.");
+            return null;
+        }
+    }
+
+    function stopLocalAudioStream() {
+        if (state.localAudioStream) {
+            console.log("[WebRTC] Stoppe lokalen Audio-Stream.");
+            state.localAudioStream.getTracks().forEach(track => track.stop());
+            state.localAudioStream = null;
+            updateLocalMuteButtonUI();
+            updateAllRemoteMuteButtons();
+        } else {
+             console.log("[WebRTC] Kein lokaler Audio-Stream zum Stoppen.");
+        }
+    }
+
+
+    function updateAllViewScreenButtons() {
+         if (!UI.userList) return;
+         UI.userList.querySelectorAll('.view-screen-button').forEach(button => {
+             const peerId = button.dataset.peerId;
+             if (peerId === state.currentlyViewingPeerId) {
+                  button.textContent = 'Anzeige stoppen';
+                  button.classList.remove('view');
+                  button.classList.add('stop');
+             } else {
+                  button.textContent = 'Bildschirm ansehen';
+                  button.classList.remove('stop');
+                  button.classList.add('view');
+             }
+         });
+    }
 
     // Startet die Socket.IO Verbindung (Funktion, die von Klick aufgerufen wird)
     function connect() { // <-- DEFINITION DER CONNECT FUNKTION
@@ -354,7 +600,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         await pc.setRemoteDescription(new RTCSessionDescription(payload));
                          console.log(`[WebRTC Signal] Peer ${from}: Remote Description (Answer) gesetzt.`);
                     } else {
-                        console.warn(`[WebRTC Signal] Peer ${from}: Empfange Answer im falschen Signaling State (${pc.signalingState}). Ignoriere.`);
+                        console.warn(`[WebRTC Signal] Peer <span class="math-inline">\{from\}\: Empfange Answer im falschen Signaling State \(</span>{pc.signalingState}). Ignoriere.`);
                     }
 
                  } else if (type === 'candidate') {
@@ -463,7 +709,7 @@ document.addEventListener('DOMContentLoaded', () => {
          if (state.screenStream) {
              console.log(`[WebRTC] Stoppe Tracks im Bildschirmstream (${state.screenStream.id}).`);
              state.screenStream.getTracks().forEach(track => {
-                  console.log(`[WebRTC] Stoppe Screen Track ${track.id} (${track.kind}).`);
+                  console.log(`[WebRTC] Stoppe Screen Track <span class="math-inline">\{track\.id\} \(</span>{track.kind}).`);
                   track.stop();
              });
              state.screenStream = null;
@@ -541,448 +787,4 @@ document.addEventListener('DOMContentLoaded', () => {
              let remoteStream = state.remoteStreams.get(peerId);
              if (!remoteStream) {
                  remoteStream = new MediaStream();
-                 state.remoteStreams.set(peerId, remoteStream);
-                  console.log(`[WebRTC] Erstelle neuen remoteStream ${remoteStream.id} für Peer ${peerId}.`);
-             }
-
-             if (!remoteStream.getTrackById(event.track.id)) {
-                 console.log(`[WebRTC] Füge Track ${event.track.id} (${event.track.kind}) zu remoteStream ${remoteStream.id} für Peer ${peerId} hinzu.`);
-                 remoteStream.addTrack(event.track);
-             } else {
-                 console.log(`[WebRTC] Track ${event.track.id} (${event.track.kind}) ist bereits in remoteStream ${remoteStream.id} für Peer ${peerId}.`);
-             }
-
-
-            if (event.track.kind === 'audio') {
-                 console.log(`[WebRTC] Track ${event.track.id} ist Audio.`);
-                 const audioElement = ensureRemoteAudioElementExists(peerId);
-                 audioElement.srcObject = remoteStream;
-                 audioElement.play().catch(e => console.warn(`[WebRTC] Fehler beim Abspielen von Remote Audio für Peer ${peerId}:`, e));
-
-                 event.track.onended = () => console.log(`[WebRTC] Remote Audio Track ${event.track.id} von Peer ${peerId} beendet.`);
-                 event.track.onmute = () => console.log(`[WebRTC] Remote Audio Track ${event.track.id} von Peer ${peerId} gemutet.`);
-                 event.track.ounmute = () => console.log(`[WebRTC] Remote Audio Track ${event.track.id} von Peer ${peerId} entmutet.`);
-
-
-            } else if (event.track.kind === 'video') {
-                console.log(`[WebRTC] Track ${event.track.id} ist Video. Von Peer ${peerId}.`);
-
-                 if (state.currentlyViewingPeerId === peerId) {
-                     console.log(`[WebRTC] Erhaltener Video Track von aktuell betrachtetem Peer ${peerId}. Aktualisiere Anzeige.`);
-                     updateRemoteScreenDisplay(peerId);
-                 }
-
-                 event.track.onended = () => {
-                     console.log(`[WebRTC] Remote Video Track ${event.track.id} von Peer ${peerId} beendet.`);
-                     const remoteStreamForPeer = state.remoteStreams.get(peerId);
-                     if (remoteStreamForPeer && remoteStreamForPeer.getVideoTracks().length === 0) {
-                         console.log(`[WebRTC] Peer ${peerId} sendet keine Video-Tracks mehr. Aktualisiere Bildschirmanzeige.`);
-                          if (state.currentlyViewingPeerId === peerId) {
-                               console.log(`[WebRTC] Der Peer (${peerId}), dessen Bildschirm ich ansehe, sendet keine Video-Tracks mehr. Stoppe Anzeige.`);
-                               handleViewScreenClick({ target: { dataset: { peerId: peerId } } }, true);
-                          }
-                     }
-                 };
-
-                  event.track.onmute = () => console.log(`[WebRTC] Remote Video Track ${event.track.id} von Peer ${peerId} gemutet.`);
-                  event.track.ounmute = () => console.log(`[WebRTC] Remote Video Track ${event.track.id} von Peer ${peerId} entmutet.`);
-            }
-
-             remoteStream.onremovetrack = (event) => {
-                  console.log(`[WebRTC] Track ${event.track.id} von Peer ${peerId} aus Stream ${remoteStream.id} entfernt.`);
-                 if (remoteStream.getTracks().length === 0) {
-                      console.log(`[WebRTC] Stream ${remoteStream.id} von Peer ${peerId} hat keine Tracks mehr. Entferne Stream aus Map.`);
-                      state.remoteStreams.delete(peerId);
-                      if (state.currentlyViewingPeerId === peerId) {
-                           console.log(`[WebRTC] Aktuell betrachteter Peer (${peerId}) hat keine Tracks mehr im Stream. Stoppe Anzeige.`);
-                           handleViewScreenClick({ target: { dataset: { peerId: peerId } } }, true);
-                      }
-                 } else {
-                      if (event.track.kind === 'video' && state.currentlyViewingPeerId === peerId) {
-                           console.log(`[WebRTC] Video Track von aktuell betrachtetem Peer (${peerId}) entfernt. Aktualisiere Anzeige.`);
-                            updateRemoteScreenDisplay(peerId);
-                      }
-                 }
-             };
-        };
-
-        pc.oniceconnectionstatechange = () => {
-             if (!pc) return;
-            const pcState = pc.iceConnectionState;
-             const peerUser = state.allUsersList.find(u => u.id === peerId);
-             const peerUsername = peerUser ? peerUser.username : peerId;
-            console.log(`[WebRTC] ICE Connection Status zu Peer '${peerUsername}' (${peerId}) geändert zu: ${pcState}`);
-             switch (pcState) {
-                case "new": case "checking":
-                    break;
-                case "connected":
-                    console.log(`[WebRTC] ICE 'connected': Erfolgreich verbunden mit Peer '${peerUsername}'. Audio sollte fließen.`);
-                    break;
-                case "completed":
-                    console.log(`[WebRTC] ICE 'completed': Alle Kandidaten für Peer '${peerUsername}' geprüft.`);
-                    break;
-                case "disconnected":
-                    console.warn(`[WebRTC] ICE 'disconnected': Verbindung zu Peer '${peerUsername}' unterbrochen. Versuche erneut...`);
-                    break;
-                case "failed":
-                    console.error(`[WebRTC] ICE 'failed': Verbindung zu Peer '${peerUsername}' fehlgeschlagen.`);
-                     closePeerConnection(peerId);
-                    break;
-                case "closed":
-                    console.log(`[WebRTC] ICE 'closed': Verbindung zu Peer '${peerUsername}' wurde geschlossen.`);
-                     closePeerConnection(peerId);
-                    break;
-            }
-        };
-
-        pc.onsignalingstatechange = () => {
-            if (!pc) return;
-            const pcState = pc.signalingState;
-             const peerUser = state.allUsersList.find(u => u.id === peerId);
-             const peerUsername = peerUser ? peerUser.username : peerId;
-            console.log(`[WebRTC] Signaling State zu Peer '${peerUsername}' (${peerId}) geändert zu: ${pcState}`);
-        };
-
-        pc.onnegotiationneeded = async () => {
-             console.log(`[WebRTC] onnegotiationneeded Event für Peer ${peerId} ausgelöst.`);
-             const isPolite = state.socketId < peerId;
-
-             if (pc.signalingState === 'stable' || pc.signalingState === 'have-remote-offer') {
-
-                 if (pc.signalingState === 'have-remote-offer' && isPolite) {
-                      console.log(`[WebRTC] Peer ${peerId}: Glare Situation (have-remote-offer, Polite). Warte auf eingehendes Offer.`);
-                       return;
-                 }
-
-                 console.log(`[WebRTC] Peer ${peerId}: Erstelle Offer. Signaling State: ${pc.signalingState}. Bin Polite? ${isPolite}.`);
-                 try {
-                     const offer = await pc.createOffer();
-                     console.log(`[WebRTC] Peer ${peerId}: Offer erstellt. Setze Local Description.`);
-                     await pc.setLocalDescription(offer);
-                     console.log(`[WebRTC] Peer ${peerId}: Local Description (Offer) gesetzt. Sende Offer an Server.`);
-
-                     socket.emit('webRTC-signal', {
-                         to: peerId,
-                         type: 'offer',
-                         payload: pc.localDescription
-                     });
-
-                 } catch (err) {
-                     console.error(`[WebRTC] Peer ${peerId}: Fehler bei Offer Erstellung oder Setzung:`, err);
-                     displayError(`Fehler bei Audio/Video-Verhandlung (Offer) mit Peer ${peerId}.`);
-                     closePeerConnection(peerId);
-                 }
-            } else {
-                 console.log(`[WebRTC] Peer ${peerId}: Signaling State (${pc.signalingState}) erlaubt keine Offer Erstellung. Warte.`);
-            }
-        };
-
-        console.log(`[WebRTC] PeerConnection Objekt für Peer ${peerId} erstellt.`);
-        return pc;
-    }
-
-    function addLocalStreamTracksToPeerConnection(pc, streamToAdd) {
-        console.log(`[WebRTC] addLocalStreamTracksToPeerConnection aufgerufen. Stream ID: ${streamToAdd ? streamToAdd.id : 'null'}.`);
-        if (!pc) {
-            console.warn("[WebRTC] addLocalStreamTracksToPeerConnection: PeerConnection ist null.");
-            return;
-        }
-
-        const senders = pc.getSenders();
-        const tracksToAdd = streamToAdd ? streamToAdd.getTracks() : [];
-
-        console.log(`[WebRTC] PC hat ${senders.length} Sender. Stream hat ${tracksToAdd.length} Tracks.`);
-
-        tracksToAdd.forEach(track => {
-            const existingSender = senders.find(s => s.track && s.track.kind === track.kind);
-
-            if (existingSender) {
-                if (existingSender.track !== track) {
-                     console.log(`[WebRTC] Ersetze Track ${track.kind} im Sender (${existingSender.track?.id || 'none'}) durch Track ${track.id}.`);
-                    existingSender.replaceTrack(track).catch(e => {
-                        console.error(`[WebRTC] Fehler beim Ersetzen des Tracks ${track.kind}:`, e);
-                    });
-                } else {
-                    console.log(`[WebRTC] Track ${track.kind} (${track.id}) ist bereits im Sender. Kein Ersetzen nötig.`);
-                }
-            } else {
-                console.log(`[WebRTC] Füge neuen Track ${track.kind} (${track.id}) hinzu.`);
-                pc.addTrack(track, streamToAdd);
-            }
-        });
-
-        senders.forEach(sender => {
-            if (sender.track && !tracksToAdd.some(track => track.id === sender.track.id)) {
-                 const trackKind = sender.track.kind;
-                 console.log(`[WebRTC] Entferne Sender für Track ${sender.track.id} (${trackKind}), da er nicht mehr im aktuellen Stream ist.`);
-                pc.removeTrack(sender);
-            } else if (!sender.track) {
-            }
-        });
-
-        console.log("[WebRTC] Tracks in PC aktualisiert.");
-    }
-
-
-    function updatePeerConnections(currentRemoteUsers) {
-        console.log(`[WebRTC] updatePeerConnections aufgerufen. Aktuelle Remote User: ${currentRemoteUsers.length}. Bestehende PCs: ${state.peerConnections.size}`);
-
-        Array.from(state.peerConnections.keys()).forEach(peerId => {
-            const peerStillExists = currentRemoteUsers.some(user => user.id === peerId);
-            if (!peerStillExists) {
-                console.log(`[WebRTC] Peer ${peerId} nicht mehr in Userliste. Schließe PeerConnection.`);
-                closePeerConnection(peerId);
-            }
-        });
-
-        currentRemoteUsers.forEach(async user => {
-            if (!state.peerConnections.has(user.id)) {
-                console.log(`[WebRTC] Neuer Peer ${user.username} (${user.id}) gefunden. Erstelle PeerConnection.`);
-                const pc = await createPeerConnection(user.id);
-
-                 const currentLocalStream = state.isSharingScreen ? state.screenStream : state.localAudioStream;
-                 if (currentLocalStream) {
-                      console.log(`[WebRTC] Füge Tracks vom aktuellen lokalen Stream (${currentLocalStream.id || 'none'}) zur neuen PC (${user.id}) hinzu.`);
-                      addLocalStreamTracksToPeerConnection(pc, currentLocalStream);
-                 } else {
-                      console.log(`[WebRTC] Kein lokaler Stream zum Hinzufügen zur neuen PC (${user.id}).`);
-                       addLocalStreamTracksToPeerConnection(pc, null);
-                 }
-
-                 const shouldInitiateOffer = state.socketId < user.id;
-                 if (shouldInitiateOffer) {
-                      console.log(`[WebRTC] Bin Initiator für Peer ${user.id}. Erstelle initiales Offer.`);
-                 } else {
-                     console.log(`[WebRTC] Bin Receiver für Peer ${user.id}. Warte auf Offer.`);
-                 }
-            } else {
-                 const pc = state.peerConnections.get(user.id);
-                 const currentLocalStream = state.isSharingScreen ? state.screenStream : state.localAudioStream;
-                 if (currentLocalStream) {
-                      addLocalStreamTracksToPeerConnection(pc, currentLocalStream);
-                 } else {
-                      console.log(`[WebRTC] Peer ${user.id} existiert, aber kein lokaler Stream zum Aktualisieren.`);
-                       addLocalStreamTracksToPeerConnection(pc, null);
-                 }
-            }
-        });
-    }
-
-
-    function closePeerConnection(peerId) {
-        console.log(`[WebRTC] closePeerConnection aufgerufen für Peer: ${peerId}.`);
-        const pc = state.peerConnections.get(peerId);
-
-        if (pc) {
-            console.log(`[WebRTC] Schließe PeerConnection mit ${peerId}.`);
-             pc.getSenders().forEach(sender => {
-                 if (sender.track) {
-                     pc.removeTrack(sender);
-                 }
-             });
-
-            pc.close();
-            state.peerConnections.delete(peerId);
-             console.log(`[WebRTC] PeerConnection mit ${peerId} gelöscht.`);
-        } else {
-             console.log(`[WebRTC] Keine PeerConnection mit ${peerId} zum Schließen gefunden.`);
-        }
-
-         removeRemoteAudioElement(peerId);
-
-         if (state.remoteStreams.has(peerId)) {
-              console.log(`[WebRTC] Entferne remoteStream für Peer ${peerId}.`);
-              const streamToRemove = state.remoteStreams.get(peerId);
-              streamToRemove.getTracks().forEach(track => track.stop());
-              state.remoteStreams.delete(peerId);
-         }
-
-         if (state.currentlyViewingPeerId === peerId) {
-              console.log(`[WebRTC] Geschlossener Peer ${peerId} wurde betrachtet. Stoppe Anzeige.`);
-              handleViewScreenClick({ target: { dataset: { peerId: peerId } } }, true);
-         }
-
-    }
-
-    function closeAllPeerConnections() {
-        console.log("[WebRTC] closeAllPeerConnections aufgerufen.");
-        Array.from(state.peerConnections.keys()).forEach(peerId => {
-            closePeerConnection(peerId);
-        });
-         state.peerConnections.clear();
-         console.log("[WebRTC] Alle PeerConnections geschlossen.");
-
-         state.remoteStreams.forEach(stream => {
-             stream.getTracks().forEach(track => track.stop());
-         });
-         state.remoteStreams.clear();
-          console.log("[WebRTC] Alle empfangenen Streams gestoppt und gelöscht.");
-
-          updateRemoteScreenDisplay(null);
-    }
-
-
-    function sendMessage() {
-        console.log("sendMessage() aufgerufen.");
-        const content = UI.messageInput.value.trim();
-        if (!content) {
-            console.log("sendMessage: Inhalt leer. Abbruch.");
-            return;
-        }
-
-        if (!socket || !state.connected) {
-            console.error("[Chat Send Error] Cannot send message. Not connected.");
-            displayError("Nicht verbunden. Nachricht kann nicht gesendet werden.");
-            return;
-        }
-
-        const message = {
-             content,
-             timestamp: new Date().toISOString(),
-             type: 'text'
-        };
-
-        console.log(`sendMessage: Sende Textnachricht: "${message.content.substring(0, Math.min(message.content.length, 50))}..."`);
-        socket.emit('message', message);
-
-
-        UI.messageInput.value = '';
-        UI.messageInput.style.height = 'auto';
-        UI.messageInput.focus();
-        sendTyping(false);
-    }
-
-    function appendMessage(msg) {
-         if (!msg || !msg.content || !msg.id || !msg.username) {
-            console.warn("appendMessage: Ungültige Nachrichtendaten erhalten.", msg);
-            return;
-        }
-
-        const msgDiv = document.createElement('div');
-        msgDiv.classList.add('message');
-        const isMe = msg.id === state.socketId;
-        if (isMe) msgDiv.classList.add('me');
-
-        const nameSpan = document.createElement('span');
-        nameSpan.classList.add('name');
-        nameSpan.textContent = escapeHTML(msg.username);
-        nameSpan.style.color = escapeHTML(msg.color || getUserColor(msg.id));
-
-        const contentDiv = document.createElement('div');
-        contentDiv.classList.add('content');
-        contentDiv.textContent = escapeHTML(msg.content);
-
-        msgDiv.appendChild(nameSpan);
-        msgDiv.appendChild(contentDiv);
-
-        UI.messagesContainer.appendChild(msgDiv);
-
-        const isScrolledToBottom = UI.messagesContainer.scrollHeight - UI.messagesContainer.clientHeight <= UI.messagesContainer.scrollTop + 20;
-        if (isMe || isScrolledToBottom) {
-            UI.messagesContainer.scrollTop = UI.messagesContainer.scrollHeight;
-        }
-    }
-
-    function sendTyping(isTyping = true) {
-        if (!socket || !state.connected || UI.messageInput.disabled) {
-             return;
-        }
-
-        clearTimeout(state.typingTimeout);
-
-        socket.emit('typing', { isTyping });
-
-        if (isTyping) {
-            state.typingTimeout = setTimeout(() => {
-                socket.emit('typing', { isTyping: false });
-            }, CONFIG.TYPING_TIMER_LENGTH);
-        }
-    }
-
-    function handleViewScreenClick(event, forceStop = false) {
-         console.log(`[UI] handleViewScreenClick aufgerufen. forceStop: ${forceStop}`);
-         const clickedButton = event.target;
-         const peerId = clickedButton.dataset.peerId;
-
-         if (!peerId) {
-             console.error("[UI] handleViewScreenClick: Keine Peer ID im Dataset gefunden.");
-             return;
-         }
-
-         const isCurrentlyViewing = state.currentlyViewingPeerId === peerId;
-
-         if (isCurrentlyViewing && !forceStop) {
-             console.log(`[UI] Klick auf "Anzeige stoppen" für Peer ${peerId}.`);
-             updateRemoteScreenDisplay(null);
-
-              state.allUsersList.forEach(user => {
-                  if (user.id !== state.socketId && user.sharingStatus) {
-                       const sharerButton = document.querySelector(`#userList li .view-screen-button[data-peer-id='${user.id}']`);
-                       if (sharerButton) sharerButton.disabled = false;
-                  }
-              });
-         } else if (!isCurrentlyViewing) {
-             console.log(`[UI] Klick auf "Bildschirm ansehen" für Peer ${peerId}.`);
-
-             const sharerUser = state.allUsersList.find(user => user.id === peerId && user.sharingStatus);
-             const sharerStream = state.remoteStreams.get(peerId);
-
-             if (sharerUser && sharerStream && sharerStream.getVideoTracks().length > 0) {
-                  console.log(`[UI] Peer ${peerId} teilt und Stream ist verfügbar. Zeige Bildschirm an.`);
-
-                  if (state.currentlyViewingPeerId !== null && state.currentlyViewingPeerId !== peerId) {
-                      console.log(`[UI] Stoppe vorherige Anzeige von Peer ${state.currentlyViewingPeerId}.`);
-                      handleViewScreenClick({ target: { dataset: { peerId: state.currentlyViewingPeerId } } }, true);
-                  }
-
-                 updateRemoteScreenDisplay(peerId);
-
-                 state.allUsersList.forEach(user => {
-                      if (user.id !== state.socketId && user.sharingStatus && user.id !== peerId) {
-                           const otherViewButton = document.querySelector(`#userList li .view-screen-button[data-peer-id='${user.id}']`);
-                           if (otherViewButton) otherViewButton.disabled = true;
-                      }
-                 });
-
-                  clickedButton.textContent = 'Anzeige stoppen';
-                  clickedButton.classList.remove('view');
-                  clickedButton.classList.add('stop');
-
-
-             } else {
-                 console.warn(`[UI] Peer ${peerId} teilt nicht oder Stream nicht verfügbar. Kann Bildschirm nicht ansehen.`);
-                 displayError(`Bildschirm von ${sharerUser ? escapeHTML(sharerUser.username) : 'diesem Benutzer'} kann nicht angesehen werden.`);
-                 updateRemoteScreenDisplay(null);
-             }
-         } else if (isCurrentlyViewing && forceStop) {
-              console.log(`[UI] Force Stop Anzeige für Peer ${peerId}.`);
-              updateRemoteScreenDisplay(null);
-
-              const viewButton = document.querySelector(`#userList li .view-screen-button[data-peer-id='${peerId}']`);
-               if (viewButton) {
-                    viewButton.textContent = 'Bildschirm ansehen';
-                    viewButton.classList.remove('stop');
-                    viewButton.classList.add('view');
-               }
-
-              state.allUsersList.forEach(user => {
-                   if (user.id !== state.socketId && user.sharingStatus) {
-                         const otherViewButton = document.querySelector(`#userList li .view-screen-button[data-peer-id='${user.id}']`);
-                         if (otherViewButton) otherViewButton.disabled = false;
-                   }
-              });
-         }
-    }
-
-
-    // --- Event Listener Zuweisungen (JETZT INNERHALB von initializeUI) ---
-    // Dieser Block wird jetzt nicht mehr außerhalb von initializeUI verwendet.
-    // Die Zuweisungen sind in initializeUI verschoben.
-
-
-    // --- Init ---
-    console.log("[App] DOMContentLoaded. App wird initialisiert.");
-    // Hier wird initializeUI aufgerufen, was nun die Event Listener zuweist
-    initializeUI();
-
-});
+                 state.remoteStreams.set(
