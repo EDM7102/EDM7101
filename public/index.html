@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EDMBook Erweiterter Chat</title>
-    <link rel="stylesheet" href="style.css"> </head>
+    <link rel="stylesheet" href="style.css">
+</head>
 <body>
     <div class="app-container">
         <header class="app-header">
@@ -30,7 +31,8 @@
                 </div>
 
                 <div class="user-list-container">
-                    <h2>Benutzer Online (<span id="userCountPlaceholder">0</span>)</h2> <ul id="userList">
+                    <h2>Benutzer Online (<span id="userCountPlaceholder">0</span>)</h2>
+                    <ul id="userList">
                         </ul>
                 </div>
             </aside>
@@ -60,7 +62,7 @@
 
                 <footer class="message-input-area">
                     <textarea id="messageInput" placeholder="Nachricht eingeben..." rows="1" disabled></textarea>
-                    <input type="file" id="fileInput" accept="image/*,application/pdf,text/*,.zip,.rar" style="display:none;" disabled>
+                    <input type="file" id="fileInput" accept="image/*,application/pdf,text/*,.zip,.rar,.doc,.docx,.xls,.xlsx,.ppt,.pptx" style="display:none;" disabled>
                     <label for="fileInput" id="fileUploadLabel" class="file-upload-label hidden" title="Datei senden (max 5MB)">📎</label>
                     <button id="sendBtn" disabled>Senden</button>
                 </footer>
@@ -68,8 +70,7 @@
         </div>
     </div>
 
-    <audio id="notifSound" src="notif.mp3" preload="auto"></audio>
-
     <script src="/socket.io/socket.io.js"></script>
-    <script src="app.js"></script> </body>
+    <script src="app.js"></script>
+</body>
 </html>
