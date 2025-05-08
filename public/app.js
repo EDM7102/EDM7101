@@ -1215,6 +1215,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Init ---
     // App initialisieren, wenn das DOM bereit ist
     console.log("[App] DOMContentLoaded. App wird initialisiert.");
+    function initializeUI() {
+    console.log("[UI] initializeUI aufgerufen.");
+    loadStateFromLocalStorage(); // Lade gespeicherte Zustände
+    updateUIAfterDisconnect(); // Setze die UI auf den Standard-Status (nicht verbunden)
+    populateMicList(); // Initialisiere die Mikrofonauswahl
+    console.log("[UI] UI erfolgreich initialisiert.");
+}
     initializeUI(); // UI initialisieren und Status setzen
 
 }); // Ende DOMContentLoaded
