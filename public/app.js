@@ -244,7 +244,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateUserList(usersArrayFromServer) {
         // DIESE FUNKTION WIRD AUFGERUFEN, WENN DER CLIENT DAS 'user list'-EVENT VOM SERVER EMPFÄNGT.
-        // Wenn dies nicht passiert (wie in deinen Logs), wird die Liste nicht aktualisiert.
+        // Wenn dies passiert, wird die Liste aktualisiert.
+        console.log("[UI] updateUserList aufgerufen mit", usersArrayFromServer.length, "Benutzern.");
         const oldUsers = state.allUsersList;
         state.allUsersList = usersArrayFromServer;
 
@@ -325,7 +326,7 @@ document.addEventListener('DOMContentLoaded', () => {
                      nameContainer.appendChild(sharingIndicator);
                 }
 
-                // Check for new users joining
+                // Check for new users joining (only if we had users before this update)
                  if (state.connected && oldUsers.length > 0 && !oldUsers.some(oldUser => oldUser.id === user.id)) {
                      console.log(`[UI] Neuer Benutzer beigetreten: ${user.username}`);
                      playNotificationSound();
@@ -813,8 +814,8 @@ document.addEventListener('DOMContentLoaded', () => {
          if (state.screenStream) {
              console.log(`[WebRTC] Stoppe Tracks im Bildschirmstream (${state.screenStream.id}).`);
              state.screenStream.getTracks().forEach(track => {
-                  console.log(`[WebRTC] Stoppe Screen Track ${track.id} (${track.kind}).`);
-                  track.stop();
+                 console.log(`[WebRTC] Stoppe Screen Track ${track.id} (${track.kind}).`);
+                 track.stop();
              });
              state.screenStream = null;
              console.log("[WebRTC] screenStream ist jetzt null.");
@@ -1282,7 +1283,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         console.log(`sendMessage: Sende Textnachricht: "${message.content.substring(0, Math.min(message.content.length, 50))}..."`);
-         // Client sendet die Nachricht AN DEN SERVER
+         // Client sendet die Nachricht AN DEN SERVER (Server muss auf 'message' lauschen und sie weiterleiten)
          if (socket) { // Ensure socket exists before emitting
             socket.emit('message', message);
          }
@@ -1302,6 +1303,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function appendMessage(msg) {
          // DIESE FUNKTION WIRD AUFGERUFEN, WENN DER CLIENT DAS 'message'-EVENT VOM SERVER EMPFÄNGT.
          // Wenn dies nicht passiert (wie in deinen Logs), werden keine Nachrichten angezeigt.
+         console.log("[UI] appendMessage aufgerufen:", msg); // Füge Log hinzu
          if (!msg || msg.content === undefined || msg.id === undefined || msg.username === undefined || !UI.messagesContainer) {
              console.warn("appendMessage: Ungültige Nachrichtendaten oder Nachrichtencontainer nicht gefunden.", msg);
              return;
@@ -1344,7 +1346,7 @@ document.addEventListener('DOMContentLoaded', () => {
          // Clear any existing timeout to prevent sending 'false' too early
          clearTimeout(state.typingTimeout);
 
-          // Client sendet Typing-Status AN DEN SERVER
+          // Client sendet Typing-Status AN DEN SERVER (Server muss auf 'typing' lauschen und es weiterleiten)
           if (socket) { // Ensure socket exists before emitting
               socket.emit('typing', { isTyping });
           }
@@ -1487,17 +1489,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
          console.log("[Socket.IO] Socket Listener werden eingerichtet.");
 
-         socket.on('connect', () => {
-             console.log("[Socket.IO] Verbunden mit Server. Socket ID:", socket.id);
-             state.socketId = socket.id;
-             state.username = UI.usernameInput ? UI.usernameInput.value : 'Unknown User'; // Capture username on connect
-             updateUIAfterConnect();
-             // Client fordert Initialzustand VOM SERVER an (Userliste etc.)
-              if (socket.connected) {
-                 socket.emit('requestInitialState');
-                 console.log("[Socket.IO] Sende 'requestInitialState'.");
-             }
+         // Client wartet auf 'joinSuccess' vom Server nach erfolgreicher Verbindung + Auth
+         socket.on('joinSuccess', (data) => {
+             console.log("[Socket.IO] joinSuccess empfangen:", data);
+             state.socketId = data.id; // Eigene Socket ID vom Server erhalten
+             // Die Benutzerliste wird direkt nach 'joinSuccess' mit dem Event 'user list' gesendet
+             updateUIAfterConnect(); // UI aktualisieren, sobald Verbindung bestätigt ist
+             // Die initiale Benutzerliste wird vom Server per 'user list' gesendet,
+             // der Listener dafür ist unten definiert.
          });
+
 
          socket.on('disconnect', (reason) => {
              console.log("[Socket.IO] Verbindung getrennt:", reason);
@@ -1513,21 +1514,21 @@ document.addEventListener('DOMContentLoaded', () => {
          });
 
          socket.on('message', (msg) => {
-             // DIESER LISTENER MUSS VOM SERVER AUSGELÖST WERDEN!
-             // Wenn deine Logs das nicht zeigen, sendet der Server keine Nachrichten zurück.
+             // DIESER LISTENER WIRD VOM SERVER ÜBER DAS EVENT 'message' AUSGELÖST.
+             // Server wurde angepasst, um 'message' statt 'chatMessage' zu senden.
              console.log("[Socket.IO] Nachricht empfangen:", msg);
              appendMessage(msg);
          });
 
          socket.on('user list', (users) => {
-              // DIESER LISTENER MUSS VOM SERVER AUSGELÖST WERDEN!
-              // Wenn deine Logs das nicht zeigen, sendet der Server keine Benutzerliste.
+              // DIESER LISTENER WIRD VOM SERVER ÜBER DAS EVENT 'user list' AUSGELÖST.
+              // Server wurde angepasst, um 'user list' statt 'userListUpdate' zu senden.
              console.log("[Socket.IO] Userliste empfangen:", users);
              updateUserList(users);
          });
 
           socket.on('typing', (data) => {
-              // DIESER LISTENER MUSS VOM SERVER AUSGELÖST WERDEN (weitergeleitet)!
+              // DIESER LISTENER WIRD VOM SERVER ÜBER DAS EVENT 'typing' AUSGELÖST (weitergeleitet).
               console.log(`[Socket.IO] Typing Status empfangen von ${data.username}: ${data.isTyping}`);
               if (data.isTyping) {
                   state.typingUsers.add(data.username);
@@ -1538,7 +1539,7 @@ document.addEventListener('DOMContentLoaded', () => {
           });
 
          socket.on('webRTC-signal', async (signal) => {
-              // DIESER LISTENER MUSS VOM SERVER AUSGELÖST WERDEN (weitergeleitete Signale)!
+              // DIESER LISTENER WIRD VOM SERVER ÜBER DAS EVENT 'webRTC-signal' AUSGELÖST (weitergeleitete Signale).
               console.log(`[Socket.IO] WebRTC Signal empfangen von ${signal.from} (Type: ${signal.type}):`, signal.payload);
               const peerId = signal.from;
               const pc = state.peerConnections.get(peerId);
@@ -1616,7 +1617,7 @@ document.addEventListener('DOMContentLoaded', () => {
          });
 
          socket.on('user left', (userId) => {
-              // DIESER LISTENER MUSS VOM SERVER AUSGELÖST WERDEN, WENN JEMAND GEHT!
+              // DIESER LISTENER WIRD VOM SERVER ÜBER DAS EVENT 'user left' AUSGELÖST (kann optional sein, wenn 'user list' immer gesendet wird).
               // Die 'user list' Aktualisierung sollte das Entfernen aus der UI übernehmen.
               console.log(`[Socket.IO] Benutzer mit ID ${userId} hat den Raum verlassen.`);
               // The 'user list' update should handle removing the user from the UI
@@ -1625,7 +1626,7 @@ document.addEventListener('DOMContentLoaded', () => {
          });
 
           socket.on('screenShareStatus', ({ userId, sharing }) => {
-              // DIESER LISTENER MUSS VOM SERVER AUSGELÖST WERDEN (weitergeleitet)!
+              // DIESER LISTENER WIRD VOM SERVER ÜBER DAS EVENT 'screenShareStatus' AUSGELÖST (weitergeleitet).
               // Die 'user list' Aktualisierung enthält bereits sharingStatus und aktualisiert die UI entsprechend.
               console.log(`[Socket.IO] Benutzer ${userId} hat Bildschirmteilung Status geändert zu ${sharing}.`);
               // The 'user list' update already includes sharingStatus,
