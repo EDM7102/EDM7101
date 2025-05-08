@@ -243,6 +243,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateUserList(usersArrayFromServer) {
+        // DIESE FUNKTION WIRD AUFGERUFEN, WENN DER CLIENT DAS 'user list'-EVENT VOM SERVER EMPFÄNGT.
+        // Wenn dies nicht passiert (wie in deinen Logs), wird die Liste nicht aktualisiert.
         const oldUsers = state.allUsersList;
         state.allUsersList = usersArrayFromServer;
 
@@ -632,6 +634,7 @@ document.addEventListener('DOMContentLoaded', () => {
              console.log("[WebRTC] setupLocalAudioStream: Bildschirmteilung aktiv, überspringe Mikrofon-Setup.");
              // Ensure screen stream tracks are added to existing PCs if they weren't already
               state.peerConnections.forEach(pc => {
+                   // Important: Pass the screen stream here if screen sharing is active
                   addLocalStreamTracksToPeerConnection(pc, state.screenStream);
               });
              updateLocalMuteButtonUI(); // Update button state (should be disabled)
@@ -761,6 +764,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   console.warn("[WebRTC] Kein Screen Video Track gefunden, onended Listener konnte nicht hinzugefügt werden.");
              }
 
+              // Client sendet Statusänderung AN DEN SERVER
               if (socket && state.connected) {
                  socket.emit('screenShareStatus', { sharing: true });
                  console.log("[Socket.IO] Sende 'screenShareStatus: true'.");
@@ -787,6 +791,7 @@ document.addEventListener('DOMContentLoaded', () => {
              // Attempt to restart local audio stream if screen sharing failed
              setupLocalAudioStream();
 
+              // Client sendet Statusänderung AN DEN SERVER
               if (socket && state.connected) {
                  socket.emit('screenShareStatus', { sharing: false });
              }
@@ -829,6 +834,7 @@ document.addEventListener('DOMContentLoaded', () => {
          // Attempt to restart local audio stream after stopping screen sharing
          setupLocalAudioStream();
 
+         // Client sendet Statusänderung AN DEN SERVER
          if (sendSignal && socket && state.connected) {
              socket.emit('screenShareStatus', { sharing: false });
              console.log("[Socket.IO] Sende 'screenShareStatus: false'.");
@@ -882,6 +888,7 @@ document.addEventListener('DOMContentLoaded', () => {
         pc.onicecandidate = event => {
             if (event.candidate && socket && state.connected) {
                  console.log(`[WebRTC] Sende ICE candidate für Peer ${peerId}:`, event.candidate);
+                 // Client sendet ICE Candidate AN DEN SERVER, damit dieser es an den anderen Peer schickt
                 socket.emit('webRTC-signal', {
                     to: peerId,
                     type: 'candidate',
@@ -1046,16 +1053,17 @@ document.addEventListener('DOMContentLoaded', () => {
                      await pc.setLocalDescription(offer);
                      console.log(`[WebRTC] Peer ${peerId}: Local Description (Offer) gesetzt. Sende Offer an Server.`);
 
+                      // Client sendet Offer AN DEN SERVER, damit dieser es an den anderen Peer schickt
                       if (socket && state.connected) {
-                          socket.emit('webRTC-signal', {
-                              to: peerId,
-                              type: 'offer',
-                              payload: pc.localDescription
-                          });
-                          console.log(`[Socket.IO] Sende 'webRTC-signal' (offer) an Peer ${peerId}.`);
-                      } else {
-                          console.warn(`[WebRTC] Cannot send offer to Peer ${peerId}. Socket not connected.`);
-                      }
+                           socket.emit('webRTC-signal', {
+                               to: peerId,
+                               type: 'offer',
+                               payload: pc.localDescription
+                           });
+                           console.log(`[Socket.IO] Sende 'webRTC-signal' (offer) an Peer ${peerId}.`);
+                       } else {
+                           console.warn(`[WebRTC] Cannot send offer to Peer ${peerId}. Socket not connected.`);
+                       }
 
                  } catch (err) {
                      console.error(`[WebRTC] Peer ${peerId}: Fehler bei Offer Erstellung oder Setzung:`, err);
@@ -1274,6 +1282,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         console.log(`sendMessage: Sende Textnachricht: "${message.content.substring(0, Math.min(message.content.length, 50))}..."`);
+         // Client sendet die Nachricht AN DEN SERVER
          if (socket) { // Ensure socket exists before emitting
             socket.emit('message', message);
          }
@@ -1291,6 +1300,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function appendMessage(msg) {
+         // DIESE FUNKTION WIRD AUFGERUFEN, WENN DER CLIENT DAS 'message'-EVENT VOM SERVER EMPFÄNGT.
+         // Wenn dies nicht passiert (wie in deinen Logs), werden keine Nachrichten angezeigt.
          if (!msg || msg.content === undefined || msg.id === undefined || msg.username === undefined || !UI.messagesContainer) {
              console.warn("appendMessage: Ungültige Nachrichtendaten oder Nachrichtencontainer nicht gefunden.", msg);
              return;
@@ -1333,6 +1344,7 @@ document.addEventListener('DOMContentLoaded', () => {
          // Clear any existing timeout to prevent sending 'false' too early
          clearTimeout(state.typingTimeout);
 
+          // Client sendet Typing-Status AN DEN SERVER
           if (socket) { // Ensure socket exists before emitting
               socket.emit('typing', { isTyping });
           }
@@ -1480,7 +1492,7 @@ document.addEventListener('DOMContentLoaded', () => {
              state.socketId = socket.id;
              state.username = UI.usernameInput ? UI.usernameInput.value : 'Unknown User'; // Capture username on connect
              updateUIAfterConnect();
-             // Request initial user list and potentially room state
+             // Client fordert Initialzustand VOM SERVER an (Userliste etc.)
               if (socket.connected) {
                  socket.emit('requestInitialState');
                  console.log("[Socket.IO] Sende 'requestInitialState'.");
@@ -1501,16 +1513,21 @@ document.addEventListener('DOMContentLoaded', () => {
          });
 
          socket.on('message', (msg) => {
+             // DIESER LISTENER MUSS VOM SERVER AUSGELÖST WERDEN!
+             // Wenn deine Logs das nicht zeigen, sendet der Server keine Nachrichten zurück.
              console.log("[Socket.IO] Nachricht empfangen:", msg);
              appendMessage(msg);
          });
 
          socket.on('user list', (users) => {
+              // DIESER LISTENER MUSS VOM SERVER AUSGELÖST WERDEN!
+              // Wenn deine Logs das nicht zeigen, sendet der Server keine Benutzerliste.
              console.log("[Socket.IO] Userliste empfangen:", users);
              updateUserList(users);
          });
 
           socket.on('typing', (data) => {
+              // DIESER LISTENER MUSS VOM SERVER AUSGELÖST WERDEN (weitergeleitet)!
               console.log(`[Socket.IO] Typing Status empfangen von ${data.username}: ${data.isTyping}`);
               if (data.isTyping) {
                   state.typingUsers.add(data.username);
@@ -1521,6 +1538,7 @@ document.addEventListener('DOMContentLoaded', () => {
           });
 
          socket.on('webRTC-signal', async (signal) => {
+              // DIESER LISTENER MUSS VOM SERVER AUSGELÖST WERDEN (weitergeleitete Signale)!
               console.log(`[Socket.IO] WebRTC Signal empfangen von ${signal.from} (Type: ${signal.type}):`, signal.payload);
               const peerId = signal.from;
               const pc = state.peerConnections.get(peerId);
@@ -1553,6 +1571,7 @@ document.addEventListener('DOMContentLoaded', () => {
                       console.log(`[WebRTC] Answer erstellt. Setze Local Description.`);
                       await pc.setLocalDescription(answer);
                       console.log(`[WebRTC] Local Description (Answer) für Peer ${peerId} gesetzt. Sende Answer an Server.`);
+                       // Client sendet Answer AN DEN SERVER, damit dieser es an den anderen Peer schickt
                        if (socket.connected) {
                            socket.emit('webRTC-signal', {
                                to: peerId,
@@ -1597,6 +1616,8 @@ document.addEventListener('DOMContentLoaded', () => {
          });
 
          socket.on('user left', (userId) => {
+              // DIESER LISTENER MUSS VOM SERVER AUSGELÖST WERDEN, WENN JEMAND GEHT!
+              // Die 'user list' Aktualisierung sollte das Entfernen aus der UI übernehmen.
               console.log(`[Socket.IO] Benutzer mit ID ${userId} hat den Raum verlassen.`);
               // The 'user list' update should handle removing the user from the UI
               // and updatePeerConnections will handle closing the PC.
@@ -1604,6 +1625,8 @@ document.addEventListener('DOMContentLoaded', () => {
          });
 
           socket.on('screenShareStatus', ({ userId, sharing }) => {
+              // DIESER LISTENER MUSS VOM SERVER AUSGELÖST WERDEN (weitergeleitet)!
+              // Die 'user list' Aktualisierung enthält bereits sharingStatus und aktualisiert die UI entsprechend.
               console.log(`[Socket.IO] Benutzer ${userId} hat Bildschirmteilung Status geändert zu ${sharing}.`);
               // The 'user list' update already includes sharingStatus,
               // which triggers updateUserList to update the UI (add/remove share icon and button).
@@ -1613,6 +1636,7 @@ document.addEventListener('DOMContentLoaded', () => {
           });
 
           socket.on('error', (error) => {
+              // DIESER LISTENER WIRD BEI Server-seitigen Fehlern ausgelöst.
               console.error('[Socket.IO] Server Error:', error);
               displayError(`Server Error: ${error.message || error}`);
           });
