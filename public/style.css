@@ -54,6 +54,9 @@
     --stop-viewing-btn-hover-bg: var(--share-screen-active-hover-bg);
 
     --sharing-indicator-color: var(--share-screen-bg);
+
+    /* Neue Farbe für Offline-Benutzer */
+    --offline-dot-color: #808080; /* Grau */
 }
 
 body {
@@ -323,10 +326,11 @@ body {
 .message-input-area button:disabled,
 #localMuteBtn.mute-btn:disabled,
 .remote-audio-item button.mute-btn:disabled,
-#shareScreenBtn:disabled {
-    background-color: #383838;
-    color: var(--text-muted-color);
-    cursor: not-allowed;
+#shareScreenBtn:disabled,
+.view-screen-button:disabled { /* Füge den View Screen Button hinzu */
+    background-color: #383838 !important; /* Override hover effect */
+    color: var(--text-muted-color) !important; /* Override hover effect */
+    cursor: not-allowed !important; /* Override cursor */
     opacity: 0.6;
 }
 
@@ -337,36 +341,48 @@ body {
     /* Border-Top durch Gap im Sidebar geregelt */
 }
 
-#userList {
+#onlineUserList,
+#offlineUserList { /* Wende Stile auf beide Listen an */
     list-style: none;
     padding: 0;
     margin: 0;
 }
-#userList li {
+#onlineUserList li,
+#offlineUserList li { /* Wende Stile auf beide Listen an */
     padding: 8px 0;
     font-size: 1em;
     display: flex;
     align-items: center;
     word-break: break-all;
-    color: var(--text-secondary-color);
+    color: var(--text-secondary-color); /* Standardfarbe für Text */
     flex-wrap: wrap;
     gap: 8px;
 }
-#userList li .user-dot {
+/* Farbe für den Benutzernamen wird jetzt im JS gesetzt */
+#onlineUserList li span:nth-child(2),
+#offlineUserList li span:nth-child(2) {
+     /* Hier keine Farbdefinition mehr, Farbe kommt von JS */
+}
+
+#onlineUserList li .user-dot,
+#offlineUserList li .user-dot { /* Wende Stile auf beide Listen an */
     width: 12px;
     height: 12px;
     border-radius: 50%;
     margin-right: 2px;
-    background-color: var(--success-bg);
+    /* Online-Farbe wird inline gesetzt */
     flex-shrink: 0;
 }
-#userList li strong {
-    color: var(--text-color);
-    font-weight: 600;
-    flex-grow: 1;
+
+/* Stil für Offline-Benutzer Punkt */
+#offlineUserList li .user-dot {
+    background-color: var(--offline-dot-color) !important; /* Überschreibe inline Farbe mit Grau */
 }
+
+
 /* Styling für den Teilen-Indikator (Icon oder Text) neben dem Namen */
-#userList li .sharing-indicator {
+/* Gilt nur für Online-Benutzer in dieser Logik */
+#onlineUserList li .sharing-indicator {
      font-size: 0.9em;
      color: var(--sharing-indicator-color);
      margin-left: 5px;
@@ -374,7 +390,8 @@ body {
 }
 
 /* Styling für den "Bildschirm ansehen" Button in der Benutzerliste */
-#userList li .view-screen-button {
+/* Gilt nur für Online-Benutzer in dieser Logik */
+#onlineUserList li .view-screen-button {
     padding: 4px 8px;
     font-size: 0.8em;
     width: auto;
@@ -384,26 +401,21 @@ body {
     transition: background-color 0.2s ease;
     flex-shrink: 0;
 }
-#userList li .view-screen-button.view {
+#onlineUserList li .view-screen-button.view {
     background-color: var(--view-screen-btn-bg);
     color: var(--text-on-accent-bg);
 }
-#userList li .view-screen-button.view:hover {
+#onlineUserList li .view-screen-button.view:hover {
     background-color: var(--view-screen-btn-hover-bg);
 }
-#userList li .view-screen-button.stop {
+#onlineUserList li .view-screen-button.stop {
      background-color: var(--stop-viewing-btn-bg);
      color: var(--text-on-accent-bg);
 }
-#userList li .view-screen-button.stop:hover {
+#onlineUserList li .view-screen-button.stop:hover {
      background-color: var(--stop-viewing-btn-hover-bg);
 }
-#userList li .view-screen-button:disabled {
-     background-color: #383838;
-     color: var(--text-muted-color);
-     cursor: not-allowed;
-     opacity: 0.6;
-}
+/* Disabled Stil wird oben global für Buttons definiert */
 
 
 /* Chat Area Styling */
@@ -555,8 +567,14 @@ body {
     display: block;
     font-size: 0.9em;
     margin-bottom: 4px;
-    color: var(--accent-highlight-color);
+    color: var(--accent-highlight-color); /* Standardfarbe für Namen im Chat */
 }
+/* Farbe der Namen im Chat wird vom JS gesetzt */
+.message .name {
+    /* Hier keine Farbdefinition mehr, Farbe kommt von JS */
+}
+
+
 .message.me {
     background-color: var(--message-bg-me);
     color: var(--message-text-me);
@@ -566,7 +584,7 @@ body {
 }
 .message:not(.me) {
     background-color: var(--message-bg-other);
-    color: var(--text-muted-color);
+    color: var(--text-muted-color); /* Textfarbe für andere Nachrichten */
     align-self: flex-start;
     border-bottom-left-radius: 6px;
     margin-left: 8px;
