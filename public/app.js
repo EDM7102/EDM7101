@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // UI Elemente Referenzen
     const UI = {
         usernameInput: document.getElementById('usernameInput'),
         connectBtn: document.getElementById('connectBtn'),
@@ -37,21 +38,19 @@ document.addEventListener('DOMContentLoaded', () => {
     let state = {
         connected: false,
         username: '',
-        roomId: 'default-room',
-        socketId: null,
+        roomId: 'default-room', // Standardraum-ID
+        socketId: null, // Eigene Socket ID
         allUsersList: [], // Beinhaltet Benutzerobjekte { id, username, color, sharingStatus: boolean, isOnline: boolean }
 
         typingTimeout: null,
-        // Geändert: Speichert User IDs, die tippen
         typingUsers: new Set(), // Set von Benutzer-IDs, die gerade tippen
 
-
-        notificationSound: new Audio('/notif.mp3'),
+        notificationSound: new Audio('/notif.mp3'), // Benachrichtigungssound
 
         // WebRTC State (Lokal)
-        localAudioStream: null,
-        screenStream: null,
-        isSharingScreen: false,
+        localAudioStream: null, // Lokaler Audio-Stream (Mikrofon)
+        screenStream: null, // Lokaler Bildschirm-Stream
+        isSharingScreen: false, // Status der Bildschirmfreigabe
 
         // WebRTC State (Remote)
         peerConnections: new Map(), // { peerId: RTCPeerConnection }
@@ -61,19 +60,20 @@ document.addEventListener('DOMContentLoaded', () => {
         // Bildschirm teilen State (Remote Anzeige)
         currentlyViewingPeerId: null, // ID des Peers, dessen Bildschirm gerade angezeigt wird
 
-        localAudioMuted: false,
+        localAudioMuted: false, // Status der lokalen Stummschaltung
     };
 
+    // Konfigurationen
     const CONFIG = {
-        TYPING_TIMER_LENGTH: 1500, // ms
-        RTC_CONFIGURATION: {
+        TYPING_TIMER_LENGTH: 1500, // ms Timeout für Tipp-Indikator
+        RTC_CONFIGURATION: { // ICE Server für WebRTC
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
                 // Füge ggf. weitere STUN/TURN-Server hinzu
             ],
         },
-        // Farben für Benutzer im Chat und der Liste
+        // Farben für Benutzer im Chat und der Liste - Diese sind jetzt weniger wichtig, da Server Farbe sendet
         USER_COLORS: ['#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9700', '#ff5722', '#795548'],
     };
 
@@ -86,9 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return str.replace(/[&<>"']/g, m => map[m]);
     }
 
-    // Hilfsfunktion zur Ermittlung der Benutzerfarbe basierend auf ID oder Namen
-    // Diese Funktion wird jetzt weniger benötigt, da der Server die Farbe sendet,
-    // aber zur Sicherheit oder für Fallbacks beibehalten.
+    // Hilfsfunktion zur Ermittlung der Benutzerfarbe basierend auf ID oder Namen (Fallback)
     function getUserColor(userIdOrName) {
         let hash = 0;
         const str = String(userIdOrName);
@@ -150,9 +148,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
          // Benutzerlisten in der UI leeren und Zähler zurücksetzen
         if(UI.onlineUserList) UI.onlineUserList.innerHTML = '';
-        if(UI.offlineUserList) UI.offlineUserList.innerHTML = '';
+        if(UI.offlineUserList) UI.offlineUserList.innerHTML = ''; // Offline Liste auch leeren
         if (UI.onlineUserCountPlaceholder) UI.onlineUserCountPlaceholder.textContent = '0';
-        if (UI.offlineUserCountPlaceholder) UI.offlineUserCountPlaceholder.textContent = '0';
+        if (UI.offlineUserCountPlaceholder) UI.offlineUserCountPlaceholder.textContent = '0'; // Offline Zähler zurücksetzen
         if (UI.offlineUserHeader) UI.offlineUserHeader.classList.add('hidden');
 
 
@@ -212,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(UI.offlineUserList) UI.offlineUserList.innerHTML = ''; // Offline Liste auch leeren
         if (UI.onlineUserCountPlaceholder) UI.onlineUserCountPlaceholder.textContent = '0';
         if (UI.offlineUserCountPlaceholder) UI.offlineUserCountPlaceholder.textContent = '0'; // Offline Zähler zurücksetzen
-        if (UI.offlineUserHeader) UI.offlineUserHeader.classList.add('hidden'); // Offline Header verstecken
+        if (UI.offlineUserHeader) UI.offlineUserHeader.classList.add('hidden');
 
 
         if(UI.typingIndicator) UI.typingIndicator.textContent = ''; // Tipp-Anzeige leeren
@@ -430,7 +428,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!user.isOnline) {
             dot.classList.add('offline');
         }
-        dot.style.backgroundColor = escapeHTML(user.color || getUserColor(user.id)); // Farbe setzen (vom Server oder generiert)
+        // Setze die Farbe des Punktes basierend auf user.color vom Server
+        dot.style.backgroundColor = escapeHTML(user.color || getUserColor(user.id));
         li.appendChild(dot);
 
         const nameContainer = document.createElement('span');
@@ -441,17 +440,25 @@ document.addEventListener('DOMContentLoaded', () => {
         nameContainer.style.textOverflow = 'ellipsis';
         nameContainer.style.whiteSpace = 'nowrap';
 
+        // Erstelle ein Span-Element für den Benutzernamen, um die Farbe zu setzen
+        const usernameSpan = document.createElement('span');
+        usernameSpan.textContent = escapeHTML(user.username);
+        // Setze die Farbe des Benutzernamens basierend auf user.color vom Server
+        usernameSpan.style.color = escapeHTML(user.color || getUserColor(user.id));
 
-        const nameNode = document.createTextNode(`${escapeHTML(user.username)}`);
-        // Spezielles Handling für den lokalen Benutzer (nur wenn online)
+        // Füge den Benutzernamen (mit Farbe) zum nameContainer hinzu
         if (user.id === state.socketId && user.isOnline) {
+             // Special styling for the local user when online
             const strong = document.createElement('strong');
-            strong.appendChild(nameNode);
+             // Füge den farbigen usernameSpan innerhalb von strong hinzu
+            strong.appendChild(usernameSpan);
             strong.appendChild(document.createTextNode(" (Du)"));
             nameContainer.appendChild(strong);
         } else {
-            nameContainer.appendChild(nameNode);
+             // For other users (online or offline), just append the colored usernameSpan
+            nameContainer.appendChild(usernameSpan);
         }
+
 
         li.appendChild(nameContainer);
 
@@ -563,7 +570,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                   // Sicherstellen, dass ein Audio-Element für diesen Benutzer existiert und dessen Mute-Zustand setzen
                   const audioElement = ensureRemoteAudioElementExists(user.id);
-                  audioElement.muted = isMuted; // Mute-Zustand des UI-Buttons auf das Audio-Element übertragen
+                  if (audioElement) { // Only if element was created
+                    audioElement.muted = isMuted; // Mute-Zustand des UI-Buttons auf das Audio-Element übertragen
+                  }
              });
          }
 
@@ -733,8 +742,9 @@ document.addEventListener('DOMContentLoaded', () => {
              localMuteBtn.textContent = state.localAudioMuted ? 'Mikro Stumm AN' : 'Mikro stumm schalten';
              localMuteBtn.classList.toggle('muted', state.localAudioMuted);
              // Deaktiviere den Button, wenn nicht verbunden, Bildschirm geteilt wird (da dann Mic-Stream inaktiv ist), oder kein Mic-Stream verfügbar ist
-             localMuteBtn.disabled = !state.connected || state.isSharingScreen || !state.localAudioStream;
-             localMuteBtn.classList.toggle('disabled', localMuteBtn.disabled); // Füge eine Klasse für disabled Styling hinzu
+             const isDisabled = !state.connected || state.isSharingScreen || !state.localAudioStream;
+             localMuteBtn.disabled = isDisabled;
+             localMuteBtn.classList.toggle('disabled', isDisabled); // Füge eine Klasse für disabled Styling hinzu
          }
      }
 
@@ -751,7 +761,7 @@ document.addEventListener('DOMContentLoaded', () => {
               if(event.target) {
                   event.target.disabled = true;
                   event.target.classList.add('disabled');
-              }
+               }
               return;
          }
 
@@ -1006,7 +1016,7 @@ document.addEventListener('DOMContentLoaded', () => {
              state.screenStream = null; // Stream-State auf null setzen
              console.log("[WebRTC] screenStream ist jetzt null.");
 
-             // Entferne die Screen-Tracks von allen PeerConnections (nur für online Peers)
+             // Entferne die Screen-tracks von allen PeerConnections (nur für online Peers)
               state.peerConnections.forEach((pc, peerId) => {
                  const peerUser = state.allUsersList.find(u => u.id === peerId && u.isOnline);
                  if (peerUser) {
@@ -1272,7 +1282,7 @@ document.addEventListener('DOMContentLoaded', () => {
         pc.onnegotiationneeded = async () => {
              console.log(`[WebRTC] onnegotiationneeded Event für Peer ${peerId} ausgelöst.`);
              // Implementierung der "polite" Methode zur Vermeidung von Glare (Offer-Kollisionen)
-             // Der Client mit der niedrigeren Socket ID ist "polite" und wartet im Konfliktfall.
+             // Der Client mit der niedrigere Socket ID ist "polite" und wartet im Konfliktfall.
              const isPolite = state.socketId < peerId;
 
              // Erstelle nur ein Offer, wenn die Verbindung im 'stable'-Zustand ist ODER
@@ -1304,11 +1314,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                       // Client sendet Offer AN DEN SERVER, damit dieser es an den anderen Peer schickt
                       // Zusätzliche Prüfung, ob der Ziel-Peer noch online ist
-                      if (socket && state.connected && targetUser) {
+                       if (socket && state.connected && targetUser) {
                            socket.emit('webRTC-signal', {
                                to: peerId, // Ziel Peer
                                type: 'offer', // Signal Typ
-                               payload: pc.localDescription // Das erstellte Offer
+                               payload: pc.localDescription
                            });
                            console.log(`[Socket.IO] Sende 'webRTC-signal' (offer) an Peer ${peerId}.`);
                        } else {
@@ -1388,7 +1398,7 @@ document.addEventListener('DOMContentLoaded', () => {
                            // pc.removeTrack(existingSender);
                       });
                  } else {
-                      console.log(`[WebRTC] Track ${track.kind} (${track.id}) ist bereits im Sender. Kein Ersetzen nötig.`);
+                      console.log(`[WebRTC] Track ${track.kind} (${track.id}) ist bereits in remoteStream für Peer ${peerId}.`);
                  }
              } else {
                  // Wenn kein Sender für diesen Track-Typ existiert, füge einen neuen Track hinzu
@@ -1424,7 +1434,7 @@ document.addEventListener('DOMContentLoaded', () => {
               const peerUser = state.allUsersList.find(user => user.id === peerId);
 
 
-             // Schließe die PC, wenn der Peer nicht mehr in der Liste der ONLINE-User ist
+             // Schließe die PC, wenn der Peer nicht mehr in der Liste der ONLINE-User ist oder offline gegangen ist
              if (!peerIsStillOnline || (peerUser && !peerUser.isOnline)) {
                  console.log(`[WebRTC] Peer ${peerId} ist nicht mehr online. Schließe PeerConnection.`);
                  closePeerConnection(peerId); // Verbindung schließen
@@ -1814,7 +1824,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   console.warn("[UI] toggleFullscreen: Browser does not support Fullscreen API on this element.");
              }
          } else { // Wenn etwas im Vollbild ist
-              console.log("[UI] toggleFullscreen: Exiting Fullscreen.");
+              console.log("[UI] Fullscreen verlassen.");
              if (document.exitFullscreen) {
                  document.exitFullscreen();
              } else if (document.webkitExitFullscreen) { /* Safari */
@@ -1853,12 +1863,29 @@ document.addEventListener('DOMContentLoaded', () => {
              // Die Benutzerliste wird vom Server aktualisiert, um uns als offline zu markieren.
          });
 
+         // ** FIX FOR TOKEN ERROR / RECONNECT ISSUES **
+         // Handle connection errors more explicitly.
          socket.on('connect_error', (err) => {
-             console.error("[Socket.IO] Verbindungsfehler:", err.message);
-             displayError(`Verbindungsfehler: ${err.message}`);
+             console.error("[Socket.IO] Verbindungsfehler:", err.message, err);
+             let errorMessage = `Verbindungsfehler: ${err.message}`;
+
+             // Check if the error is related to authentication (e.g., invalid credentials)
+             if (err.message === 'Benutzername in diesem Raum bereits online') {
+                 errorMessage = 'Verbindung fehlgeschlagen: Dieser Benutzername ist in diesem Raum bereits online.';
+             } else if (err.message === 'Benutzername ist erforderlich' || err.message === 'Raum-ID ist erforderlich') {
+                  errorMessage = `Verbindung fehlgeschlagen: Authentifizierungsfehler - ${err.message}.`;
+             } else if (err.data && err.data.type === 'UnauthorizedError') {
+                 // Handle specific unauthorized errors from the server if they were sent with err.data
+                  errorMessage = `Verbindung fehlgeschlagen: Authentifizierung fehlgeschlagen - ${err.data.message || err.message}.`;
+             }
+             // You might add more specific error checks here based on potential server errors
+
+             displayError(errorMessage);
              setConnectionStatus('disconnected', 'Verbindungsfehler');
-             // updateUIAfterDisconnect wird normalerweise auch durch das 'disconnect' Event ausgelöst
+             // updateUIAfterDisconnect will be called by the 'disconnect' event which follows 'connect_error'
          });
+         // ** END FIX **
+
 
          // Listener für eingehende Chat-Nachrichten
          socket.on('message', (msg) => {
@@ -1949,7 +1976,6 @@ document.addEventListener('DOMContentLoaded', () => {
                       // Erstelle ein Answer
                       const answer = await pc.createAnswer();
                       console.log(`[WebRTC] Answer erstellt. Setze Local Description.`);
-                      // Setze die Local Description mit dem erstellten Answer
                       await pc.setLocalDescription(answer);
                       console.log(`[WebRTC] Local Description (Answer) für Peer ${peerId} gesetzt. Sende Answer an Server.`);
                        // Sende das Answer an den Server zur Weiterleitung an den anderen Peer
@@ -2056,10 +2082,15 @@ document.addEventListener('DOMContentLoaded', () => {
             state.username = UI.usernameInput.value.trim(); // Benutzernamen speichern
 
             // Prüfe, ob der Socket bereits existiert und aktiv ist (sollte bei disabled UI nicht passieren)
-            if (socket && (socket.connected || socket.connecting)) {
-                 console.warn("Socket already exists and is connecting or connected. Aborting connect.");
-                 return;
-            }
+            // ** FIX: Ensure old socket is properly handled before creating a new one **
+             if (socket) {
+                  console.log("[App] Existing socket found. Disconnecting it before creating a new one.");
+                  socket.removeAllListeners(); // Remove all listeners from the old socket
+                  socket.disconnect(); // Explicitly disconnect the old socket
+                  socket = null; // Clear the reference
+             }
+            // ** END FIX **
+
 
              console.log(`[App] Versuche Verbindung als ${state.username} zu Raum ${state.roomId}...`);
             // Socket.IO-Verbindung aufbauen
@@ -2218,7 +2249,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Sende ein Signal an den Server, dass der Benutzer geht, damit der Status sofort auf offline gesetzt wird
             // Anstatt socket.disconnect(), was sofort trennt, können wir ein Event senden und dann disconnect()
             // socket.emit('userLeaving', { userId: state.socketId, roomId: state.roomId }); // Optional: eigenes Event senden
-            socket.disconnect(); // Socket ordentlich trennen (löst Server-seitiges 'disconnect' aus)
+            socket.disconnect(); // Socket ordentlich trennen
         }
          // Stoppe lokale Medienströme und schließe Peer-Verbindungen
          stopLocalAudioStream(); // Mikrofon stoppen
