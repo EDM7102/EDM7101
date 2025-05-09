@@ -19,8 +19,8 @@ const PORT = process.env.PORT || 3000;
 // Speichert die aktuell verbundenen Benutzer: { socketId: { username, color, id, roomId, sharingStatus: boolean } }
 const connectedUsers = new Map();
 
-// Speichert die Historie der Benutzer (online/offline): { userId: { username, color, roomId, lastSeen: Date, isOnline: boolean, sharingStatus: boolean } }
-// Wir verwenden die Socket ID als Key in der History, auch wenn der Benutzer offline ist.
+// Speichert die Historie der Benutzer (online/offline): { username_roomId: { userId: string, username: string, color: string, roomId: string, lastSeen: Date, isOnline: boolean, sharingStatus: boolean } }
+// Wir verwenden eine Kombination aus Benutzername und Raum-ID als Key in der History, um Benutzer über Verbindungen hinweg zu verfolgen.
 const userHistory = new Map();
 const OFFLINE_DISPLAY_DURATION_MS = 30 * 60 * 1000; // Zeige Offline-Benutzer für 30 Minuten
 
@@ -46,8 +46,9 @@ io.use((socket, next) => {
         return next(new Error('Raum-ID ist erforderlich'));
     }
 
+    const userIdentifier = `${username.toLowerCase()}-${roomId}`;
+
      // Prüfe, ob der Benutzername in diesem Raum bereits online ist (andere Socket ID aber gleicher Name)
-     // Diese Prüfung sollte nur gegen aktuell VERBUNDENE Benutzer erfolgen.
      const usernameExistsOnlineInRoom = Array.from(connectedUsers.values()).some(user =>
          user.roomId === roomId && user.username.toLowerCase() === username.toLowerCase() && user.id !== socket.id
      );
@@ -59,9 +60,24 @@ io.use((socket, next) => {
 
     socket.username = username;
     socket.roomId = roomId;
-    socket.userColor = getRandomColor(socket.id); // Verwende die Socket ID für eine konsistente Farbe
 
-    console.log(`[Auth Success] Auth erfolgreich für: ${username} in Raum ${roomId} (Socket ID: ${socket.id})`);
+    // ** FIX FOR CONSISTENT COLOR AND HISTORY UPDATE ON RECONNECT **
+    // Check if user exists in history by username and room ID
+    const existingHistoryEntry = userHistory.get(userIdentifier);
+
+    if (existingHistoryEntry) {
+        // User found in history, use their existing color
+        socket.userColor = existingHistoryEntry.color;
+        console.log(`[Auth Success] Benutzer '${username}' in Raum '${roomId}' in History gefunden. Verwende Farbe: ${socket.userColor}`);
+    } else {
+        // New user or first time in this room, generate a new color based on username+roomId for consistency
+        socket.userColor = getRandomColor(userIdentifier); // Use userIdentifier for color consistency across sessions
+        console.log(`[Auth Success] Neuer Benutzer '${username}' in Raum '${roomId}'. Generiere Farbe: ${socket.userColor}`);
+    }
+    // ** END FIX **
+
+
+    console.log(`[Auth Success] Auth erfolgreich für: ${username} in Raum ${roomId} (Socket ID: ${socket.id}). Farbe: ${socket.userColor}`);
     next();
 });
 
@@ -69,30 +85,33 @@ io.use((socket, next) => {
 io.on('connection', (socket) => {
     console.log(`[Connect] Benutzer '${socket.username}' (${socket.id}) verbunden mit Raum '${socket.roomId}'.`);
 
-    // ** FIX FOR RECONNECT BUG: Handle user history update on connection more robustly **
-    const existingHistoryEntry = userHistory.get(socket.id);
+    const userIdentifier = `${socket.username.toLowerCase()}-${socket.roomId}`;
 
     const newUser = {
-        id: socket.id,
+        id: socket.id, // Current socket ID
         username: socket.username,
-        color: socket.userColor, // Use the color assigned during auth
+        color: socket.userColor, // Use the color determined during auth
         roomId: socket.roomId,
-        // Use sharingStatus from history if exists, otherwise default to false
-        sharingStatus: existingHistoryEntry ? existingHistoryEntry.sharingStatus : false
+        sharingStatus: false // Default to false on connection
     };
-    // Wenn ein History-Eintrag existiert, aktualisiere ihn statt einen neuen zu erstellen.
+
+    connectedUsers.set(socket.id, newUser); // Add to currently connected users
+
+    // ** FIX FOR RECONNECT BUG: Update user history on connection **
+    const existingHistoryEntry = userHistory.get(userIdentifier);
+
     if (existingHistoryEntry) {
-        existingHistoryEntry.username = newUser.username; // Aktualisiere ggf. den Namen (nicht im Auth-Flow, aber gute Praxis)
-        existingHistoryEntry.color = newUser.color; // Aktualisiere Farbe
-        existingHistoryEntry.roomId = newUser.roomId; // Aktualisiere Raum
+        // User found in history, update their status and current socket ID
+        existingHistoryEntry.userId = socket.id; // Update to the new socket ID
         existingHistoryEntry.lastSeen = new Date();
-        existingHistoryEntry.isOnline = true; // Markiere als online
-        existingHistoryEntry.sharingStatus = newUser.sharingStatus; // Übernehme Sharing Status (oder setze ihn zurück?)
-        userHistory.set(socket.id, existingHistoryEntry);
-        console.log(`[History Update] Bestehender History-Eintrag für ${socket.id} aktualisiert (Online).`);
+        existingHistoryEntry.isOnline = true; // Mark as online
+        existingHistoryEntry.sharingStatus = false; // Reset sharing status on new connection
+        userHistory.set(userIdentifier, existingHistoryEntry);
+        console.log(`[History Update] Bestehender History-Eintrag für '${userIdentifier}' aktualisiert (Online, neue ID: ${socket.id}).`);
     } else {
-         // Neuer History-Eintrag, falls keiner existiert
-         userHistory.set(socket.id, {
+         // New history entry, if none exists for this username+roomId
+         userHistory.set(userIdentifier, {
+             userId: socket.id, // Store the socket ID
              username: newUser.username,
              color: newUser.color,
              roomId: newUser.roomId,
@@ -100,10 +119,9 @@ io.on('connection', (socket) => {
              isOnline: true,
              sharingStatus: newUser.sharingStatus
          });
-         console.log(`[History Update] Neuer History-Eintrag für ${socket.id} erstellt.`);
+         console.log(`[History Update] Neuer History-Eintrag für '${userIdentifier}' erstellt (ID: ${socket.id}).`);
     }
-
-    connectedUsers.set(socket.id, newUser); // Füge zur Liste der verbundenen Benutzer hinzu
+    // ** END FIX **
 
 
     socket.join(socket.roomId);
@@ -111,52 +129,64 @@ io.on('connection', (socket) => {
     // Hilfsfunktion, um die aktuelle Benutzerliste im Raum zu holen und zu senden
     const sendUserListUpdate = (roomId) => {
         const now = new Date();
-        // Filter connected users for the room
-        const onlineUsersInRoom = Array.from(connectedUsers.values()).filter(user => user.roomId === roomId);
+        const usersToSend = [];
+        const processedUserIdentifiers = new Set(); // To prevent duplicates for the same username in the room
 
-        // Get relevant offline users for the room from history
-        // Filter out currently online users (based on connectedUsers) from the offline list
-        // Also filter by room ID stored in history
-        const offlineUsersInRoom = Array.from(userHistory.entries())
-            .filter(([userId, userData]) =>
-                userData.roomId === roomId && // Must be in the same room as the update is for
-                !userData.isOnline && // Must be marked as offline
-                (now.getTime() - userData.lastSeen.getTime()) <= OFFLINE_DISPLAY_DURATION_MS && // Within display duration
-                 // Double-check against connectedUsers to be safe, though isOnline flag should handle this
-                !connectedUsers.has(userId)
-            )
-            .map(([userId, userData]) => ({
-                id: userId,
-                username: userData.username,
-                color: userData.color, // Sende die gespeicherte Farbe
-                isOnline: false, // Explicitly mark as offline
-                sharingStatus: userData.sharingStatus // Include sharing status from history
-            }));
-
-
-        // Combine online and offline users
-        const usersToSend = onlineUsersInRoom.map(user => ({
-             id: user.id,
-             username: user.username,
-             color: user.color,
-             sharingStatus: user.sharingStatus,
-             isOnline: true // Explicitly mark as online
-        })).concat(offlineUsersInRoom); // Add offline users to the list
-
-
-        // Sort users (e.g., online first, then alphabetically)
-        usersToSend.sort((a, b) => {
-            // Sort by online status (online true > false)
-            if (a.isOnline !== b.isOnline) {
-                return b.isOnline - a.isOnline;
+        // Iterate through userHistory to build the list for this room
+        Array.from(userHistory.entries()).forEach(([userIdentifier, userData]) => {
+            // Only process users from the relevant room
+            if (userData.roomId !== roomId) {
+                return;
             }
-            // Then sort by username alphabetically
-            return a.username.localeCompare(b.username);
+
+            // If this user (by username+roomId) has already been added (should not happen with the new logic, but safe check)
+            if (processedUserIdentifiers.has(userIdentifier)) {
+                 console.warn(`[UserList Update] Duplicate user identifier '${userIdentifier}' found in history iteration. Skipping.`);
+                 return;
+            }
+
+            // Check if the user is currently online based on the history entry's userId
+            const isCurrentlyConnected = connectedUsers.has(userData.userId);
+
+            if (isCurrentlyConnected) {
+                 // User is currently online. Use their live data from connectedUsers.
+                 const connectedUser = connectedUsers.get(userData.userId);
+                 usersToSend.push({
+                     id: connectedUser.id, // Use the current socket ID
+                     username: connectedUser.username,
+                     color: connectedUser.color, // Use the color from connectedUsers
+                     sharingStatus: connectedUser.sharingStatus,
+                     isOnline: true
+                 });
+                 processedUserIdentifiers.add(userIdentifier); // Mark this username+room as processed
+
+            } else {
+                // User is not currently online. Check if their history should be displayed as offline.
+                if (!userData.isOnline && (now.getTime() - userData.lastSeen.getTime()) <= OFFLINE_DISPLAY_DURATION_MS) {
+                     usersToSend.push({
+                         id: userData.userId, // Use the historical socket ID for the offline entry
+                         username: userData.username,
+                         color: userData.color, // Use the color from history
+                         sharingStatus: userData.sharingStatus, // Include sharing status from history (should be false on disconnect)
+                         isOnline: false
+                     });
+                     processedUserIdentifiers.add(userIdentifier); // Mark this username+room as processed
+                }
+                 // If they are offline and outside the display duration, they are implicitly filtered out.
+            }
+        });
+
+        // Sort users (online first, then alphabetically)
+        usersToSend.sort((a, b) => {
+            if (a.isOnline !== b.isOnline) {
+                return b.isOnline - a.isOnline; // Online users first
+            }
+            return a.username.localeCompare(b.username); // Sort alphabetically if same status
         });
 
 
         io.to(roomId).emit('user list', usersToSend);
-        console.log(`[Room Update] Benutzerliste für Raum '${roomId}' aktualisiert. Sende 'user list'. Gesamt: ${usersToSend.length}, Online: ${onlineUsersInRoom.length}, Offline (im Zeitraum): ${offlineUsersInRoom.length}.`);
+        console.log(`[Room Update] Benutzerliste für Raum '${roomId}' aktualisiert. Sende 'user list'. Gesamt: ${usersToSend.length}.`);
     };
 
 
@@ -251,14 +281,19 @@ io.on('connection', (socket) => {
             sender.sharingStatus = data.sharing;
              connectedUsers.set(socket.id, sender); // Update in connectedUsers
 
-             // Update in userHistory as well
-             const historyEntry = userHistory.get(socket.id);
+             // Update in userHistory as well using the userIdentifier
+             const userIdentifier = `${sender.username.toLowerCase()}-${sender.roomId}`;
+             const historyEntry = userHistory.get(userIdentifier);
              if(historyEntry) {
                  historyEntry.sharingStatus = data.sharing;
                  // Also update lastSeen and isOnline as user is actively sharing
                  historyEntry.lastSeen = new Date();
-                 historyEntry.isOnline = true;
-                 userHistory.set(socket.id, historyEntry);
+                 historyEntry.isOnline = true; // User is online if sharing
+                 userHistory.set(userIdentifier, historyEntry);
+                 console.log(`[History Update] History-Eintrag für '${userIdentifier}' mit Sharing Status ${data.sharing} aktualisiert.`);
+             } else {
+                 console.warn(`[ScreenShare Warn] History entry not found for userIdentifier '${userIdentifier}' during screenShareStatus update.`);
+                 // This case should ideally not happen if history is updated on connect
              }
 
 
@@ -277,31 +312,36 @@ io.on('connection', (socket) => {
         const disconnectingUser = connectedUsers.get(socket.id);
         if (disconnectingUser) {
             const formerRoomId = disconnectingUser.roomId;
+            const userIdentifier = `${disconnectingUser.username.toLowerCase()}-${formerRoomId}`;
             console.log(`[Disconnect] Benutzer '${disconnectingUser.username}' (${socket.id}) hat die Verbindung getrennt (Raum: ${formerRoomId}). Grund: ${reason}`);
 
-            // Update userHistory status to offline and update lastSeen
-            const historyEntry = userHistory.get(socket.id);
+            // ** FIX FOR RECONNECT BUG: Update userHistory status to offline **
+            const historyEntry = userHistory.get(userIdentifier);
             if(historyEntry) {
                 historyEntry.isOnline = false;
                 historyEntry.lastSeen = new Date();
-                // Set sharingStatus to false on disconnect
-                historyEntry.sharingStatus = false;
-                userHistory.set(socket.id, historyEntry);
-                 console.log(`[History Update] History-Eintrag für ${socket.id} auf offline gesetzt.`);
+                historyEntry.sharingStatus = false; // Set sharingStatus to false on disconnect
+                // Keep the userId in history for potential future reconnects from the same userIdentifier
+                // historyEntry.userId = undefined; // Optional: clear the socket ID, but keeping it might help identify the last known socket.
+                userHistory.set(userIdentifier, historyEntry);
+                 console.log(`[History Update] History-Eintrag für '${userIdentifier}' auf offline gesetzt (ID: ${disconnectingUser.id}).`);
             } else {
                  // This case should ideally not happen if history is updated on connect
-                 console.warn(`[Disconnect Warn] userHistory entry not found for disconnecting user ${socket.id}. Attempting to create.`);
-                 // Attempt to add a history entry if missing, using available info
-                 userHistory.set(socket.id, {
+                 console.warn(`[Disconnect Warn] userHistory entry not found for disconnecting userIdentifier '${userIdentifier}'.`);
+                 // Attempt to create a history entry if missing, using available info
+                 userHistory.set(userIdentifier, {
+                     userId: disconnectingUser.id, // Store the last known socket ID
                      username: disconnectingUser.username,
                      color: disconnectingUser.color,
                      roomId: formerRoomId,
                      lastSeen: new Date(),
                      isOnline: false,
-                     sharingStatus: false // Default to false on missing history
+                     sharingStatus: false
                  });
-                 console.log(`[History Update] Fehlender History-Eintrag für ${socket.id} erstellt (offline).`);
+                 console.log(`[History Update] Fehlender History-Eintrag für '${userIdentifier}' erstellt (offline).`);
             }
+            // ** END FIX **
+
 
             connectedUsers.delete(socket.id); // Remove from connected users
 
@@ -311,31 +351,22 @@ io.on('connection', (socket) => {
         } else {
             console.log(`[Disconnect] Unbekannter Benutzer (${socket.id}) hat die Verbindung getrennt. Grund: ${reason}`);
              // Handle unknown disconnect - if socket ID exists in history, mark as offline.
-             const historyEntry = userHistory.get(socket.id);
-             if(historyEntry) {
-                  historyEntry.isOnline = false;
-                  historyEntry.lastSeen = new Date();
-                   historyEntry.sharingStatus = false; // Sharing stops on disconnect
-                  userHistory.set(socket.id, historyEntry);
-                   console.log(`[History Update] History-Eintrag für unbekannten ${socket.id} auf offline gesetzt.`);
-                   // If we know the room from history, send an update to that room
-                   if(historyEntry.roomId) {
-                       sendUserListUpdate(historyEntry.roomId);
-                   }
-             } else {
-                  console.warn(`[History Update] Unbekannter Socket ${socket.id} war auch nicht in der History. Keine Aktion.`);
-             }
+             // This part is tricky as we don't have username/roomId for the unknown socket directly.
+             // A robust history would need to map socket IDs to userIdentifiers on connect.
+             // For now, we rely on the history entry being found by userIdentifier during disconnect of a known user.
+             // If a socket disconnects and was never successfully authenticated and added to connectedUsers/userHistory,
+             // they won't appear in the list anyway.
+             console.warn(`[Disconnect Warn] Unbekannter Socket ${socket.id} getrennt. Keine History-Aktualisierung möglich ohne UserIdentifier.`);
         }
     });
 
 });
 
-function getRandomColor(id) {
-     // Nutzt die Socket ID, die beim Auth gesetzt wurde, um eine konsistente Farbe zu erhalten.
-     // Fällt zurück auf übergebene ID (z.B. für alte Nachrichten oder wenn Auth umgangen wird).
+function getRandomColor(identifier) {
+     // Nutzt einen Identifier (z.B. username_roomId) um eine konsistente Farbe zu erhalten.
      const colors = ['#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9700', '#ff5722', '#795548'];
      let hash = 0;
-     const str = String(id);
+     const str = String(identifier);
      for (let i = 0; i < str.length; i++) {
          hash = str.charCodeAt(i) + ((hash << 5) - hash);
      }
