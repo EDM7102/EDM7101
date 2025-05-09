@@ -22,7 +22,7 @@ const connectedUsers = new Map();
 // Speichert die Historie der Benutzer (online/offline): { username_roomId: { userId: string, username: string, color: string, roomId: string, lastSeen: Date, isOnline: boolean, sharingStatus: boolean } }
 // Wir verwenden eine Kombination aus Benutzername und Raum-ID als Key in der History, um Benutzer über Verbindungen hinweg zu verfolgen.
 const userHistory = new Map();
-const OFFLINE_DISPLAY_DURATION_MS = 300000000000000000000000000000000000000000000000000000 * 60 * 1000; // Zeige Offline-Benutzer für 30 Minuten
+const OFFLINE_DISPLAY_DURATION_MS = 10000 * 24 * 60 * 60 * 1000; // Zeige Offline-Benutzer für 10.000 Tage
 
 // Statische Dateien ausliefern (HTML, CSS, Client-JS)
 app.use(express.static(path.join(__dirname, 'public')));
