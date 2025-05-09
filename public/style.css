@@ -55,19 +55,27 @@
 
     --sharing-indicator-color: var(--share-screen-bg);
 
-    /* Neue Farbe für Offline-Benutzer */
+    /* Farbe für Offline-Benutzer Punkt */
     --offline-dot-color: #808080; /* Grau */
+}
+
+/* ** ANPASSUNG FÜR VOLLBILDHÖHE ** */
+/* Stellen Sie sicher, dass html und body die volle Höhe des Viewports nutzen können */
+html, body {
+    height: 100%; /* Setze Höhe auf 100% */
+    margin: 0; /* Entferne Standard-Margin */
+    padding: 0; /* Entferne Standard-Padding */
+    overflow: hidden; /* Verhindere Scrollbalken auf html/body */
 }
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    margin: 0;
     background-color: var(--primary-bg);
     color: var(--text-color);
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 100vh;
+    /* min-height: 100vh;  Kann entfernt werden, wenn height: 100% gesetzt ist */
     font-size: 15px;
     line-height: 1.6;
 }
@@ -75,14 +83,16 @@ body {
 .app-container {
     width: 98%;
     max-width: 1600px;
-    height: 95vh;
-    max-height: 1000px;
+    /* ** ANPASSUNG FÜR VOLLBILDHÖHE ** */
+    height: 100%; /* Setze Höhe auf 100% des Elternelements (body) */
+    max-height: none; /* Entferne die maximale Höhenbeschränkung */
+    /* ** ENDE ANPASSUNG ** */
     background-color: var(--secondary-bg);
     border-radius: 12px;
     box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: hidden; /* Wichtig, damit interne Bereiche scrollen können */
     border: 1px solid var(--border-color);
 }
 
@@ -93,7 +103,7 @@ body {
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid var(--divider-color);
-    flex-shrink: 0;
+    flex-shrink: 0; /* Verhindert, dass der Header schrumpft */
 }
 
 .app-header h1 {
@@ -108,7 +118,7 @@ body {
     border-radius: 5px;
     font-size: 0.95em;
     font-weight: bold;
-    flex-shrink: 0;
+    flex-shrink: 0; /* Verhindert, dass der Statusindikator schrumpft */
 }
 .status-indicator.connected { background-color: var(--success-bg); color: var(--success-text-color); }
 .status-indicator.disconnected { background-color: var(--error-bg); color: var(--error-text-color); }
@@ -116,8 +126,8 @@ body {
 
 .main-content {
     display: flex;
-    flex-grow: 1;
-    overflow: hidden;
+    flex-grow: 1; /* Lässt diesen Bereich den restlichen Platz einnehmen */
+    overflow: hidden; /* Verhindert Scrollbalken hier, innere Bereiche scrollen */
 }
 
 .sidebar {
@@ -129,8 +139,8 @@ body {
     display: flex;
     flex-direction: column;
     gap: 25px;
-    overflow-y: auto;
-    flex-shrink: 0;
+    overflow-y: auto; /* Ermöglicht Scrollen, wenn der Inhalt länger ist als die Höhe */
+    flex-shrink: 0; /* Verhindert, dass die Seitenleiste schrumpft */
 }
 
 .connection-controls h2,
@@ -321,18 +331,26 @@ body {
     background-color: #a92428;
 }
 
+/* ** ANPASSUNG: Stil für deaktivierte Buttons (grau und nicht klickbar) ** */
+/* Diese Regel behält das graue Aussehen für die meisten deaktivierten Buttons bei */
 .connection-controls button:disabled,
 .connection-controls select:disabled,
-.message-input-area button:disabled,
 #localMuteBtn.mute-btn:disabled,
 .remote-audio-item button.mute-btn:disabled,
 #shareScreenBtn:disabled,
-.view-screen-button:disabled { /* Füge den View Screen Button hinzu */
+.view-screen-button:disabled {
     background-color: #383838 !important; /* Override hover effect */
     color: var(--text-muted-color) !important; /* Override hover effect */
     cursor: not-allowed !important; /* Override cursor */
     opacity: 0.6;
 }
+
+/* ** NEUE REGEL: Senden Button ausblenden, wenn er disabled ist ** */
+#sendBtn:disabled {
+    display: none; /* Blendet den Button komplett aus */
+}
+/* ** ENDE NEUE REGEL ** */
+
 
 /* Benutzerliste Styling */
 .user-list-container {
@@ -420,11 +438,11 @@ body {
 
 /* Chat Area Styling */
 .chat-area {
-    flex-grow: 1;
+    flex-grow: 1; /* Lässt den Chat-Bereich den verbleibenden Platz einnehmen */
     display: flex;
     flex-direction: column;
     background-color: var(--content-area-bg);
-    padding: 0px;
+    padding: 0px; /* Kein Padding hier, da Messages-Container Padding hat */
 }
 
 /* Remote Screen Container Styling */
@@ -432,7 +450,7 @@ body {
     background-color: black;
     display: flex;
     flex-direction: column;
-    flex-shrink: 0;
+    flex-shrink: 0; /* Verhindert, dass der Remote Screen schrumpft */
     border-bottom: 1px solid var(--divider-color);
     position: relative;
     padding: 10px;
@@ -456,7 +474,7 @@ body {
 }
 
 .remote-screen-container .screen-video-box {
-    flex-grow: 1;
+    flex-grow: 1; /* Lässt das Video den verfügbaren Platz in der Box einnehmen */
     display: flex;
     justify-content: center;
     align-items: center;
@@ -532,9 +550,9 @@ body {
 
 
 .messages-container {
-    flex-grow: 1;
+    flex-grow: 1; /* Lässt den Nachrichtenbereich den verbleibenden Platz einnehmen */
     padding: 20px;
-    overflow-y: auto;
+    overflow-y: auto; /* Ermöglicht vertikales Scrollen */
     display: flex;
     flex-direction: column;
     gap: 15px;
@@ -567,13 +585,8 @@ body {
     display: block;
     font-size: 0.9em;
     margin-bottom: 4px;
-    color: var(--accent-highlight-color); /* Standardfarbe für Namen im Chat */
+    /* Farbe wird jetzt vom JS gesetzt */
 }
-/* Farbe der Namen im Chat wird vom JS gesetzt */
-.message .name {
-    /* Hier keine Farbdefinition mehr, Farbe kommt von JS */
-}
-
 
 .message.me {
     background-color: var(--message-bg-me);
@@ -599,7 +612,7 @@ body {
     min-height: 25px;
     border-top: 1px solid var(--divider-color);
     background-color: var(--secondary-bg);
-    flex-shrink: 0;
+    flex-shrink: 0; /* Verhindert, dass der Tipp-Indikator schrumpft */
 }
 
 
@@ -610,10 +623,10 @@ body {
     border-top: 1px solid var(--divider-color);
     align-items: center;
     gap: 10px;
-    flex-shrink: 0;
+    flex-shrink: 0; /* Verhindert, dass der Eingabebereich schrumpft */
 }
 #messageInput {
-    flex-grow: 1;
+    flex-grow: 1; /* Lässt das Eingabefeld den verfügbaren Platz einnehmen */
     padding: 12px 15px;
     border: 1px solid var(--border-color);
     border-radius: 24px;
@@ -641,6 +654,12 @@ body {
     min-width: 80px;
      align-self: center;
 }
+
+/* ** NEUE REGEL: Senden Button ausblenden, wenn er disabled ist ** */
+#sendBtn:disabled {
+    display: none; /* Blendet den Button komplett aus */
+}
+/* ** ENDE NEUE REGEL ** */
 
 
 .error-message {
@@ -673,7 +692,7 @@ body {
     }
     .app-container {
         width: 100%;
-        height: 100vh;
+        height: 100vh; /* Volle Höhe auf kleinen Bildschirmen */
         max-height: none;
         border-radius: 0;
         box-shadow: none;
@@ -692,7 +711,7 @@ body {
         width: 100%;
         border-right: none;
         border-bottom: 1px solid var(--divider-color);
-        max-height: 50vh;
+        max-height: 50vh; /* Begrenze Höhe der Sidebar auf kleinen Bildschirmen */
         padding: 15px;
         gap: 20px;
     }
@@ -776,11 +795,13 @@ body {
     }
 
     .message-input-area {
+        display: flex;
         padding: 10px 15px;
         gap: 8px;
          align-items: center;
     }
     #messageInput {
+        flex-grow: 1; /* Lässt das Eingabefeld den verfügbaren Platz einnehmen */
         padding: 10px 12px;
         border-radius: 20px;
         max-height: 80px;
@@ -791,6 +812,12 @@ body {
          border-radius: 20px;
           align-self: center;
      }
+
+    /* ** NEUE REGEL: Senden Button ausblenden, wenn er disabled ist ** */
+    #sendBtn:disabled {
+        display: none; /* Blendet den Button komplett aus */
+    }
+    /* ** ENDE NEUE REGEL ** */
 
 
     .error-message {
