@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Füge ggf. weitere STUN/TURN-Server hinzu
             ],
         },
-        // Farben für Benutzer im Chat und der Liste - Diese sind jetzt weniger wichtig, da Server Farbe sendet
+        // Farben für Benutzer im Chat und der Liste
         USER_COLORS: ['#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9700', '#ff5722', '#795548'],
     };
 
@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let i = 0; i < str.length; i++) {
             hash = str.charCodeAt(i) + ((hash << 5) - hash);
         }
-        return CONFIG.USER_COLORS[Math.abs(hash) % CONFIG.USER_COLORS.length]; // Should use colors array from config
+        return CONFIG.USER_COLORS[Math.abs(hash) % CONFIG.USER_COLORS.length];
     }
 
     // Spielt den Benachrichtigungssound ab
@@ -150,9 +150,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
          // Benutzerlisten in der UI leeren und Zähler zurücksetzen
         if(UI.onlineUserList) UI.onlineUserList.innerHTML = '';
-        if(UI.offlineUserList) UI.offlineUserList.innerHTML = ''; // Offline Liste auch leeren
+        if(UI.offlineUserList) UI.offlineUserList.innerHTML = '';
         if (UI.onlineUserCountPlaceholder) UI.onlineUserCountPlaceholder.textContent = '0';
-        if (UI.offlineUserCountPlaceholder) UI.offlineUserCountPlaceholder.textContent = '0'; // Offline Zähler zurücksetzen
+        if (UI.offlineUserCountPlaceholder) UI.offlineUserCountPlaceholder.textContent = '0';
         if (UI.offlineUserHeader) UI.offlineUserHeader.classList.add('hidden');
 
 
@@ -212,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(UI.offlineUserList) UI.offlineUserList.innerHTML = ''; // Offline Liste auch leeren
         if (UI.onlineUserCountPlaceholder) UI.onlineUserCountPlaceholder.textContent = '0';
         if (UI.offlineUserCountPlaceholder) UI.offlineUserCountPlaceholder.textContent = '0'; // Offline Zähler zurücksetzen
-        if (UI.offlineUserHeader) UI.offlineUserHeader.classList.add('hidden');
+        if (UI.offlineUserHeader) UI.offlineUserHeader.classList.add('hidden'); // Offline Header verstecken
 
 
         if(UI.typingIndicator) UI.typingIndicator.textContent = ''; // Tipp-Anzeige leeren
@@ -430,8 +430,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!user.isOnline) {
             dot.classList.add('offline');
         }
-        // Setze die Farbe des Punktes basierend auf user.color vom Server
-        dot.style.backgroundColor = escapeHTML(user.color || getUserColor(user.id));
+        dot.style.backgroundColor = escapeHTML(user.color || getUserColor(user.id)); // Farbe setzen (vom Server oder generiert)
         li.appendChild(dot);
 
         const nameContainer = document.createElement('span');
@@ -442,26 +441,17 @@ document.addEventListener('DOMContentLoaded', () => {
         nameContainer.style.textOverflow = 'ellipsis';
         nameContainer.style.whiteSpace = 'nowrap';
 
-        // ** FIX: Set the color of the username text based on user.color **
-        const nameSpan = document.createElement('span');
-        nameSpan.textContent = escapeHTML(user.username);
-        // Setze die Farbe des Benutzernamens basierend auf user.color vom Server
-        nameSpan.style.color = escapeHTML(user.color || getUserColor(user.id));
-        // ** END FIX **
 
-
+        const nameNode = document.createTextNode(`${escapeHTML(user.username)}`);
+        // Spezielles Handling für den lokalen Benutzer (nur wenn online)
         if (user.id === state.socketId && user.isOnline) {
-             // Special styling for the local user when online
             const strong = document.createElement('strong');
-             // Verwende den nameSpan innerhalb von strong, um die Farbe zu behalten
-            strong.appendChild(nameSpan);
+            strong.appendChild(nameNode);
             strong.appendChild(document.createTextNode(" (Du)"));
             nameContainer.appendChild(strong);
         } else {
-             // For other users (online or offline), just append the colored nameSpan
-            nameContainer.appendChild(nameSpan);
+            nameContainer.appendChild(nameNode);
         }
-
 
         li.appendChild(nameContainer);
 
@@ -573,9 +563,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                   // Sicherstellen, dass ein Audio-Element für diesen Benutzer existiert und dessen Mute-Zustand setzen
                   const audioElement = ensureRemoteAudioElementExists(user.id);
-                  if (audioElement) { // Only if element was created
-                    audioElement.muted = isMuted; // Mute-Zustand des UI-Buttons auf das Audio-Element übertragen
-                  }
+                  audioElement.muted = isMuted; // Mute-Zustand des UI-Buttons auf das Audio-Element übertragen
              });
          }
 
@@ -684,7 +672,7 @@ document.addEventListener('DOMContentLoaded', () => {
              audioElement = new Audio();
              audioElement.autoplay = true; // Audio soll automatisch abspielen
              audioElement.style.display = 'none'; // Nicht sichtbar
-             // Füge das Audio-Element zum DOM hinzu, z.g. direkt im Body
+             // Füge das Audio-Element zum DOM hinzu, z.B. direkt im Body
              document.body.appendChild(audioElement); // Zum Body hinzufügen
 
              state.remoteAudioElements.set(peerId, audioElement); // Im State speichern
@@ -745,9 +733,8 @@ document.addEventListener('DOMContentLoaded', () => {
              localMuteBtn.textContent = state.localAudioMuted ? 'Mikro Stumm AN' : 'Mikro stumm schalten';
              localMuteBtn.classList.toggle('muted', state.localAudioMuted);
              // Deaktiviere den Button, wenn nicht verbunden, Bildschirm geteilt wird (da dann Mic-Stream inaktiv ist), oder kein Mic-Stream verfügbar ist
-             const isDisabled = !state.connected || state.isSharingScreen || !state.localAudioStream;
-             localMuteBtn.disabled = isDisabled;
-             localMuteBtn.classList.toggle('disabled', isDisabled); // Füge eine Klasse für disabled Styling hinzu
+             localMuteBtn.disabled = !state.connected || state.isSharingScreen || !state.localAudioStream;
+             localMuteBtn.classList.toggle('disabled', localMuteBtn.disabled); // Füge eine Klasse für disabled Styling hinzu
          }
      }
 
@@ -764,7 +751,7 @@ document.addEventListener('DOMContentLoaded', () => {
               if(event.target) {
                   event.target.disabled = true;
                   event.target.classList.add('disabled');
-               }
+              }
               return;
          }
 
@@ -1019,7 +1006,7 @@ document.addEventListener('DOMContentLoaded', () => {
              state.screenStream = null; // Stream-State auf null setzen
              console.log("[WebRTC] screenStream ist jetzt null.");
 
-             // Entferne die Screen-tracks von allen PeerConnections (nur für online Peers)
+             // Entferne die Screen-Tracks von allen PeerConnections (nur für online Peers)
               state.peerConnections.forEach((pc, peerId) => {
                  const peerUser = state.allUsersList.find(u => u.id === peerId && u.isOnline);
                  if (peerUser) {
@@ -1285,7 +1272,7 @@ document.addEventListener('DOMContentLoaded', () => {
         pc.onnegotiationneeded = async () => {
              console.log(`[WebRTC] onnegotiationneeded Event für Peer ${peerId} ausgelöst.`);
              // Implementierung der "polite" Methode zur Vermeidung von Glare (Offer-Kollisionen)
-             // Der Client mit der niedrigere Socket ID ist "polite" und wartet im Konfliktfall.
+             // Der Client mit der niedrigeren Socket ID ist "polite" und wartet im Konfliktfall.
              const isPolite = state.socketId < peerId;
 
              // Erstelle nur ein Offer, wenn die Verbindung im 'stable'-Zustand ist ODER
@@ -1317,11 +1304,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                       // Client sendet Offer AN DEN SERVER, damit dieser es an den anderen Peer schickt
                       // Zusätzliche Prüfung, ob der Ziel-Peer noch online ist
-                       if (socket && state.connected && targetUser) {
+                      if (socket && state.connected && targetUser) {
                            socket.emit('webRTC-signal', {
                                to: peerId, // Ziel Peer
                                type: 'offer', // Signal Typ
-                               payload: pc.localDescription
+                               payload: pc.localDescription // Das erstellte Offer
                            });
                            console.log(`[Socket.IO] Sende 'webRTC-signal' (offer) an Peer ${peerId}.`);
                        } else {
@@ -1401,7 +1388,7 @@ document.addEventListener('DOMContentLoaded', () => {
                            // pc.removeTrack(existingSender);
                       });
                  } else {
-                      console.log(`[WebRTC] Track ${track.kind} (${track.id}) ist bereits in remoteStream für Peer ${peerId}.`);
+                      console.log(`[WebRTC] Track ${track.kind} (${track.id}) ist bereits im Sender. Kein Ersetzen nötig.`);
                  }
              } else {
                  // Wenn kein Sender für diesen Track-Typ existiert, füge einen neuen Track hinzu
@@ -1437,7 +1424,7 @@ document.addEventListener('DOMContentLoaded', () => {
               const peerUser = state.allUsersList.find(user => user.id === peerId);
 
 
-             // Schließe die PC, wenn der Peer nicht mehr in der Liste der ONLINE-User ist oder offline gegangen ist
+             // Schließe die PC, wenn der Peer nicht mehr in der Liste der ONLINE-User ist
              if (!peerIsStillOnline || (peerUser && !peerUser.isOnline)) {
                  console.log(`[WebRTC] Peer ${peerId} ist nicht mehr online. Schließe PeerConnection.`);
                  closePeerConnection(peerId); // Verbindung schließen
@@ -1597,7 +1584,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         console.log(`sendMessage: Sende Textnachricht: "${message.content.substring(0, Math.min(message.content.length, 50))}..."`);
-         // Client sendet die Nachricht AN DEN SERVER (Server muss auf 'message' lauschen und es weiterleiten)
+         // Client sendet die Nachricht AN DEN SERVER (Server muss auf 'message' lauschen und sie weiterleiten)
          if (socket) { // Stelle sicher, dass der Socket existiert
             socket.emit('message', message); // Sende das 'message'-Event an den Server
          }
@@ -1827,7 +1814,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   console.warn("[UI] toggleFullscreen: Browser does not support Fullscreen API on this element.");
              }
          } else { // Wenn etwas im Vollbild ist
-              console.log("[UI] Fullscreen verlassen.");
+              console.log("[UI] toggleFullscreen: Exiting Fullscreen.");
              if (document.exitFullscreen) {
                  document.exitFullscreen();
              } else if (document.webkitExitFullscreen) { /* Safari */
@@ -1962,6 +1949,7 @@ document.addEventListener('DOMContentLoaded', () => {
                       // Erstelle ein Answer
                       const answer = await pc.createAnswer();
                       console.log(`[WebRTC] Answer erstellt. Setze Local Description.`);
+                      // Setze die Local Description mit dem erstellten Answer
                       await pc.setLocalDescription(answer);
                       console.log(`[WebRTC] Local Description (Answer) für Peer ${peerId} gesetzt. Sende Answer an Server.`);
                        // Sende das Answer an den Server zur Weiterleitung an den anderen Peer
@@ -2032,7 +2020,7 @@ document.addEventListener('DOMContentLoaded', () => {
          socket.on('webRTC-error', (error) => {
               console.error('[Socket.IO] Server reported WebRTC Error:', error);
               displayError(`WebRTC Error: ${error.message || 'Ein Fehler ist bei der WebRTC Kommunikation aufgetreten.'}`);
-              // Hier könnte man spezifischer auf Fehler reagieren, z.g. die PC zu dem betroffenen Peer schließen.
+              // Hier könnte man spezifischer auf Fehler reagieren, z.B. die PC zu dem betroffenen Peer schließen.
               if (error.to) {
                    console.log(`[WebRTC] Schließe PeerConnection zu ${error.to} aufgrund von Server-gemeldetem Fehler.`);
                   closePeerConnection(error.to);
@@ -2164,4 +2152,87 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (state.isSharingScreen) {
              console.warn("[WebRTC] Mikrofonauswahl geändert während Bildschirmteilung. Änderung wird nach Beendigung der Teilung wirksam.");
              // Optional: Zeige eine Nachricht für den Benutzer an
-             displayError("Mikrofo
+             displayError("Mikrofonauswahl ändert sich erst nach Beendigung der Bildschirmteilung.");
+        } else {
+            console.log("[WebRTC] Mikrofonauswahl geändert (nicht verbunden). Wird bei nächster Verbindung verwendet.");
+        }
+    });
+
+    // Listener für den lokalen Mute Button
+    const localMuteBtn = document.getElementById('localMuteBtn');
+    if (localMuteBtn) {
+         localMuteBtn.addEventListener('click', toggleLocalAudioMute);
+         console.log("[App] localMuteBtn Listener zugewiesen.");
+    } else {
+         console.warn("[App] localMuteBtn Element nicht gefunden.");
+    }
+
+
+    // Listener für den Bildschirm-Teilen Button
+    if (UI.shareScreenBtn) UI.shareScreenBtn.addEventListener('click', toggleScreenSharing);
+     else {
+         console.warn("[App] shareScreenBtn Element nicht gefunden.");
+     }
+
+
+    // Listener für den Vollbild Button im Remote Screen Container
+     if (UI.remoteScreenFullscreenBtn) {
+          UI.remoteScreenFullscreenBtn.addEventListener('click', () => {
+              // Wenn der Container existiert, schalte Vollbild um
+              if (UI.remoteScreenContainer) {
+                  toggleFullscreen(UI.remoteScreenContainer);
+              }
+          });
+          console.log("[App] remoteScreenFullscreenBtn Listener zugewiesen.");
+     } else {
+          console.warn("[App] remoteScreenFullscreenBtn Element nicht gefunden.");
+     }
+
+     // Listener für das globale fullscreenchange Event des Browsers
+     // Aktualisiert den Text des Vollbild-Buttons
+     document.addEventListener('fullscreenchange', () => {
+          if (UI.remoteScreenFullscreenBtn && UI.remoteScreenContainer) {
+               // Prüfe, ob der Remote Screen Container oder ein darin enthaltenes Element gerade im Vollbild ist
+               const isRemoteScreenInFullscreen = document.fullscreenElement === UI.remoteScreenContainer || (UI.remoteScreenContainer && UI.remoteScreenContainer.contains(document.fullscreenElement));
+               UI.remoteScreenFullscreenBtn.textContent = isRemoteScreenInFullscreen ? "Vollbild verlassen" : "Vollbild";
+               // Füge/Entferne die is-fullscreen Klasse für CSS-Styling
+               UI.remoteScreenContainer.classList.toggle('is-fullscreen', isRemoteScreenInFullscreen);
+                // Füge/Entferne die is-fullscreen Klasse auch am Videoelement selbst
+               if (UI.remoteScreenVideo) UI.remoteScreenVideo.classList.toggle('is-fullscreen', isRemoteScreenInFullscreen);
+          } else if (document.fullscreenElement === null) {
+              // Wenn Vollbild beendet wird, aber die Elemente nicht gefunden wurden (z.B. nach Trennung),
+              // stelle sicher, dass die Klasse entfernt wird.
+               if (UI.remoteScreenContainer) UI.remoteScreenContainer.classList.remove('is-fullscreen');
+               if (UI.remoteScreenVideo) UI.remoteScreenVideo.classList.remove('is-fullscreen');
+          }
+     });
+     console.log("[App] fullscreenchange Listener zugewiesen.");
+
+
+    // Behandelt das Schließen/Neuladen des Browserfensters
+    window.addEventListener('beforeunload', () => {
+        console.log("[App] window.beforeunload event gefeuert. Versuche aufzuräumen.");
+        // Trenne die Socket-Verbindung, wenn verbunden
+        if (socket && socket.connected) {
+            console.log("[Socket.IO] Trenne Socket vor dem Entladen.");
+            // Sende ein Signal an den Server, dass der Benutzer geht, damit der Status sofort auf offline gesetzt wird
+            // Anstatt socket.disconnect(), was sofort trennt, können wir ein Event senden und dann disconnect()
+            // socket.emit('userLeaving', { userId: state.socketId, roomId: state.roomId }); // Optional: eigenes Event senden
+            socket.disconnect(); // Socket ordentlich trennen (löst Server-seitiges 'disconnect' aus)
+        }
+         // Stoppe lokale Medienströme und schließe Peer-Verbindungen
+         stopLocalAudioStream(); // Mikrofon stoppen
+         stopScreenSharing(false); // Bildschirmteilung stoppen (kein Signal senden, da Disconnect erwartet wird)
+         closeAllPeerConnections(); // Alle WebRTC Verbindungen schließen
+         console.log("[App] cleanup vor unload abgeschlossen.");
+    });
+     console.log("[App] beforeunload Listener zugewiesen.");
+
+
+    // --- Init ---
+    console.log("[App] DOMContentLoaded. App wird initialisiert.");
+    initializeUI(); // UI in Initialzustand setzen
+     // Fülle die Mikrofonliste sofort beim Laden
+     populateMicList();
+
+});
