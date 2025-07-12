@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EDMBook</title>
+    <link rel="stylesheet" href="style.css">
+    </head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>EDMBook</h1>
+            <div class="status-container">
+                <div id="statusIndicator" class="status-indicator disconnected">Getrennt</div>
+                <div id="connectionTime" class="connection-time hidden">00:00:00</div>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <aside class="sidebar">
+                <div class="connection-controls">
+                    <h2>Verbindung</h2>
+                    <label for="usernameInput">Benutzername:</label>
+                    <input type="text" id="usernameInput" placeholder="Dein Name...">
+
+                    <label for="micSelect">Mikrofon:</label>
+                    <select id="micSelect" title="Mikrofon auswählen">
+                        <option value="">Standard-Mikrofon</option>
+                        </select>
+
+                    <button id="localMuteBtn" class="hidden mute-btn">Mikro stumm schalten</button>
+
+                    <button id="shareScreenBtn" class="hidden">🖥 Bildschirm teilen</button>
+
+
+                    <button id="connectBtn">Verbinden</button>
+                    <button id="disconnectBtn" class="hidden danger-btn">Trennen</button>
+                </div>
+
+                <div id="remoteAudioControls" class="audio-controls-section hidden">
+                    </div>
+
+                <div class="user-list-container">
+                    <h2>Benutzer Online (<span id="onlineUserCountPlaceholder">0</span>)</h2>
+                    <ul id="onlineUserList">
+                        </ul>
+
+                    <h2 id="offlineUserHeader" class="hidden">Benutzer Offline (<span id="offlineUserCountPlaceholder">0</span>)</h2>
+                    <ul id="offlineUserList">
+                        </ul>
+                </div>
+            </aside>
+
+            <main class="chat-area">
+                <div id="errorMessage" class="error-message hidden"></div>
+
+                <div id="remoteScreenContainer" class="remote-screen-container hidden">
+                     <div class="screen-header">
+                          <h3>Geteilter Bildschirm von <span id="remoteScreenSharerName"></span></h3>
+                          </div>
+                     <div class="screen-video-box">
+                          <video id="remoteScreenVideo" autoplay playsinline></video>
+                          </div>
+                     <button class="fullscreen-btn">Vollbild</button>
+                 </div>
+
+
+                <div id="messagesContainer" class="messages-container">
+                    </div>
+
+                <div id="typingIndicator" class="typing-indicator" style="display: none;"></div>
+
+                <footer class="message-input-area">
+                    <div class="input-container">
+                        <textarea id="messageInput" placeholder="Nachricht eingeben und Enter drücken …" rows="1" disabled></textarea>
+                        <div class="input-buttons">
+                            <label for="fileInput" class="file-upload-btn" title="Datei auswählen">
+                                📁
+                                <input type="file" id="fileInput" accept="*/*" disabled>
+                            </label>
+                            <button id="sendBtn" disabled>Senden</button>
+                        </div>
+                    </div>
+                </footer>
+            </main>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

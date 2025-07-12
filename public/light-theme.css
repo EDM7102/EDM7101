@@ -1,0 +1,59 @@
+/* Allgemeine Farbvariablen für ein helles Design */
+:root {
+    --primary-bg: #f0f2f5;
+    --secondary-bg: #ffffff;
+    --content-area-bg: #f0f2f5;
+    --content-element-bg: #ffffff;
+
+    --text-color: #050505;
+    --text-secondary-color: #65676b;
+    --text-muted-color: #8a8d91;
+    --text-on-accent-bg: #ffffff;
+
+    --border-color: #ced0d4;
+    --divider-color: #dadde1;
+
+    --accent-highlight-color: #1877f2;
+    --link-color: #1877f2;
+
+    --button-bg: #e4e6eb;
+    --button-hover-bg: #d8dadf;
+    --button-text-color: var(--text-color);
+
+    --button-primary-bg: #1877f2;
+    --button-primary-hover-bg: #166fe5;
+
+    --message-bg-me: #1877f2;
+    --message-text-me: var(--text-on-accent-bg);
+    --message-bg-other: #e4e6eb;
+    --message-text-other: var(--text-color);
+
+    --error-bg: #fa383e;
+    --error-text-color: var(--text-on-accent-bg);
+    --success-bg: #42b72a;
+    --success-text-color: var(--text-on-accent-bg);
+
+    /* Farben für Audio-Steuerung */
+    --audio-active-color: #4caf50;
+    --audio-muted-color: #f44336;
+    --audio-button-bg: var(--button-bg);
+    --audio-button-hover-bg: var(--button-hover-bg);
+    --audio-button-muted-bg: var(--error-bg);
+    --audio-button-muted-hover-bg: #d32f2f;
+
+    /* Farben für Bildschirmteilen */
+    --share-screen-bg: #1877f2;
+    --share-screen-hover-bg: #166fe5;
+    --share-screen-active-bg: #fa383e;
+    --share-screen-active-hover-bg: #e32b31;
+
+    --view-screen-btn-bg: var(--share-screen-bg);
+    --view-screen-btn-hover-bg: var(--share-screen-hover-bg);
+    --stop-viewing-btn-bg: var(--share-screen-active-bg);
+    --stop-viewing-btn-hover-bg: var(--share-screen-active-hover-bg);
+
+    --sharing-indicator-color: var(--share-screen-bg);
+
+    /* Farbe für Offline-Benutzer Punkt */
+    --offline-dot-color: #8a8d91; /* Grau */
+} 
